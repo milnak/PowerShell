@@ -1,0 +1,9 @@
+# .gitignore
+# PowerShell profile backup based on https://blog.erikhorton.com/2024/05/11/using-git-to-manage-dotfiles-and-configs.html
+
+*
+!.gitignore
+!*.ps1
+powershell.config.json
+
+
