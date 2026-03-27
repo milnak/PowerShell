@@ -13,7 +13,7 @@ function Invoke-Code {
         # Files to edit. Wildcards supported.
         [Parameter(Mandatory, Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [string[]]$Path,
-        # Whether to create a new VSCode isntance.
+        # Whether to create a new VSCode instance.
         [switch]$NewWindow,
         # Command to launch code. Typically 'code.cmd'
         [string]$CodeCommand = 'code.cmd'

@@ -2,9 +2,12 @@
 .SYNOPSIS
 Open git repo homepage.
 .DESCRIPTION
-Run from anywhere inside of a local git project.
+Opens the remote origin URL of the current git repository in the default browser.
+Run from anywhere inside of a local git project. Use -Root to open the repository
+root rather than the current subdirectory path.
 #>
 function Invoke-GitRepo {
+    [CmdletBinding()]
     Param(
         # Launch browser to root of repo?
         [switch]$Root
@@ -27,13 +30,16 @@ function Invoke-GitRepo {
 Backup modified git files
 #>
 function gitbackup {
+    [CmdletBinding(SupportsShouldProcess)]
     Param([Parameter(mandatory = $true, position = 0)][string]$Destination)
 
     $backupDir = (Join-Path $Destination (Get-Date -Format FileDateTime))
-    git.exe status --porcelain=v1 | Where-Object { $_ -notlike 'D *' } | ForEach-Object {
-        $item = $_.SubString(3)
-        Copy-Item -LiteralPath $item -Destination (New-Item -Type Directory -Force (Join-Path $backupDir (Split-Path -Parent $item))) -Verbose
-        git.exe status | Out-File -Encoding UTF8 (Join-Path $backupDir 'gitstatus.txt')
+    if ($PSCmdlet.ShouldProcess($backupDir, 'Create backup')) {
+        git.exe status --porcelain=v1 | Where-Object { $_ -notlike 'D *' } | ForEach-Object {
+            $item = $_.SubString(3)
+            Copy-Item -LiteralPath $item -Destination (New-Item -Type Directory -Force (Join-Path $backupDir (Split-Path -Parent $item))) -Verbose
+            git.exe status | Out-File -Encoding UTF8 (Join-Path $backupDir 'gitstatus.txt')
+        }
     }
 }
 
@@ -43,6 +49,7 @@ function gitbackup {
 Combination of "git grep" and "git blame".
 #>
 function Get-GitGrepBlame {
+    [CmdletBinding()]
     Param([Parameter(Mandatory)][string]$Query)
 
     # grep "--null" uses null separators, blame "-c" uses tab separators.
@@ -162,6 +169,7 @@ function Format-GitConfig {
 
 
 function Invoke-GitDownHelper {
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory)][string]$Author,
         [Parameter(Mandatory)][string]$Repository,
@@ -176,7 +184,10 @@ function Invoke-GitDownHelper {
     $prevProgressPreference = $global:ProgressPreference
     $global:ProgressPreference = 'SilentlyContinue'
     try {
-        $response = Invoke-WebRequest -Uri $apiUri
+        $response = Invoke-WebRequest -Uri $apiUri -ErrorAction Stop
+    }
+    catch {
+        throw "Failed to retrieve GitHub API response for '$apiUri': $_"
     }
     finally {
         $global:ProgressPreference = $prevProgressPreference
@@ -192,6 +203,9 @@ function Invoke-GitDownHelper {
             try {
                 # FUTURE: check $obj.size, $obj.sha
                 Invoke-WebRequest -Uri $obj.download_url -OutFile $obj.path -ErrorAction Stop
+            }
+            catch {
+                throw "Failed to download '$($obj.path)' from '$($obj.download_url)': $_"
             }
             finally {
                 $global:ProgressPreference = $prevProgressPreference
@@ -231,7 +245,12 @@ A URI pointing to a GitHub repository tree location, e.g.
 Invoke-GitDown -RepoPath 'https://github.com/microsoft/CsWinRT/tree/master/src/Samples/NetProjectionSample'
 #>
 function Invoke-GitDown {
+    [CmdletBinding()]
     param ([Parameter(Mandatory)][Uri]$RepoPath)
+
+    if ($RepoPath.Segments.Count -lt 5) {
+        throw "Not a valid GitHub tree URL. Expected format: 'https://github.com/owner/repo/tree/branch/path'. Got: '$RepoPath'"
+    }
 
     # e.g. 'https://github.com/microsoft/CsWinRT/tree/master/src/Samples/NetProjectionSample'
     $Author = $RepoPath.Segments[1] -replace '/', ''  # microsoft

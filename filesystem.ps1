@@ -4,6 +4,7 @@ Creates a temporary folder and cds into it.
 Outputs the path to allow for assigning to a variable.
 #>
 function mdcdtemp {
+    [CmdletBinding()]
     $tempPath = [IO.Path]::Combine([IO.Path]::GetTempPath(), [IO.Path]::GetRandomFileName())
     New-Item -Path $tempPath -ItemType Directory -Force | Out-Null
     Push-Location -LiteralPath $tempPath
@@ -76,9 +77,10 @@ Recursive file find.
 By default will return all files starting in current folder tree.
 #>
 function rff {
+    [CmdletBinding()]
     param(
-        [Parameter(Position = 0)] [string]$Filter = '*',
-        [Parameter(Position = 1)] [string]$Path = '.'
+        [Parameter(Position = 0)] [ValidateNotNullOrEmpty()] [string]$Filter = '*',
+        [Parameter(Position = 1)] [ValidateNotNullOrEmpty()] [string]$Path = '.'
     )
 
     Get-ChildItem -Recurse -File -Filter $Filter -LiteralPath $Path | Select-Object -ExpandProperty FullName
@@ -92,8 +94,9 @@ Recursive Grep
 By default will start in current folder
 #>
 function rgrep {
+    [CmdletBinding()]
     param(
-        [Parameter(Position = 0, Mandatory = $true)] [string]$Pattern,
+        [Parameter(Position = 0, Mandatory = $true)] [ValidateNotNullOrEmpty()] [string]$Pattern,
         [Parameter(Position = 1)] [string]$Files = '.'
     )
     Get-ChildItem -Recurse -File -Filter $Files | Select-String -Pattern $Pattern
@@ -114,21 +117,15 @@ function Get-FileHashBase64 {
     )
 
     begin {
-        switch ($Algorithm) {
-            'SHA1' { $algorithmId = 'Security.Cryptography.SHA1Managed' }
-            'SHA256' { $algorithmId = 'Security.Cryptography.SHA256Managed' }
-            'SHA384' { $algorithmId = 'Security.Cryptography.SHA384Managed' }
-            'SHA512' { $algorithmId = 'Security.Cryptography.SHA512Managed' }
-            'MD5' { $algorithmId = 'Security.Cryptography.MD5CryptoServiceProvider' }
-        }
-        Write-Verbose "Get-FileHashBase64 begin : $algorithmId"
+        $hashAlgorithm = [System.Security.Cryptography.HashAlgorithm]::Create($Algorithm)
+        Write-Verbose "Get-FileHashBase64 begin : $Algorithm"
     }
 
     process {
         foreach ($file in $Path) {
-            $resolvedFile = Resolve-Path $File
+            $resolvedFile = Resolve-Path -LiteralPath $file
             Write-Verbose "Get-FileHashBase64 process $resolvedFile"
-            $hash = (New-Object -TypeName $algorithmId).ComputeHash([IO.File]::OpenRead($resolvedFile))
+            $hash = $hashAlgorithm.ComputeHash([IO.File]::OpenRead($resolvedFile))
             [PSCustomObject]@{
                 'Algorithm'  = $Algorithm
                 'Hash'       = [BitConverter]::ToString($hash) -replace '-', ''
@@ -139,6 +136,7 @@ function Get-FileHashBase64 {
     }
 
     end {
+        $hashAlgorithm.Dispose()
         Write-Verbose 'Get-FileHashBase64 end'
     }
 }
@@ -149,12 +147,19 @@ function Get-FileHashBase64 {
 Use sysinternals "du" to show child folder sizes.
 #>
 function Invoke-DU {
-    param ([string]$Path = '.')
+    [CmdletBinding()]
+    param ([ValidateNotNullOrEmpty()] [string]$Path = '.')
 
-    du.exe -nobanner -c -l 1 $Path
+    begin {
+        Get-Command -Name 'du.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    }
+
+    process {
+        du.exe -nobanner -c -l 1 $Path
   | ConvertFrom-Csv
   | Sort-Object -Descending { [uint64]$_.DirectorySizeOnDisk }
   | Select-Object -First 15 @{ Name = 'Size'; Expression = { '{0,15:N0}' -f [uint64]$_.DirectorySizeOnDisk } }, Path
+    }
 }
 
 
@@ -198,7 +203,7 @@ function Set-SelfOwnership {
     process {
         foreach ($item in $Path) {
             Write-Verbose "Taking ownership of $item"
-            $ResolvedPath = Resolve-Path -LiteralPath $Path -ErrorAction Stop
+            $ResolvedPath = Resolve-Path -LiteralPath $item -ErrorAction Stop
             if ($PSCmdlet.ShouldProcess($ResolvedPath, 'Take Ownership')) {
                 if (Test-Path -LiteralPath $ResolvedPath -PathType Container) {
                     takeown.exe /f $ResolvedPath /r /d y
@@ -232,6 +237,8 @@ function Set-SelfOwnership {
 Display disk information in human readable format.
 #>
 function Get-DiskUsage {
+    [CmdletBinding()]
+    param()
     Get-Volume `
     | Where-Object DriveLetter -ne $null `
     | Sort-Object DriveLetter `

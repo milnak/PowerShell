@@ -96,6 +96,7 @@ function Read-Xsc {
     The object representing the XSC data (from Read-Xsc).
 #>
 function Write-Xsc {
+    [CmdletBinding()]
     param ([Parameter(Mandatory)]$XSC)
 
     # Write header
@@ -157,7 +158,7 @@ function Invoke-FixXsc {
         try {
             Write-Host "Processing file: $File"
             $xsc = Read-Xsc -Path $File
-            if ($xsc -eq $null -or $XSC.Version -eq $null -or $XSC.Transcribe -eq $null -or $XSC.Transcribe -eq $null) {
+            if ($null -eq $xsc -or $null -eq $XSC.Version -or $null -eq $XSC.Transcribe) {
                 Write-Warning "Failed to read XSC file at path '$File'. Skipping."
                 return
             }

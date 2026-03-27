@@ -108,7 +108,7 @@ function Invoke-Normalize {
             continue
         }
 
-        $tempfile = Join-Path -Path (Get-Location) -ChildPath "$itemname-normalized$($itemextension)"
+        $tempfile = Join-Path -Path (Split-Path -LiteralPath $resolveditem -Parent) -ChildPath "$itemname-normalized$($itemextension)"
         Write-Output "Applying gain of $gain dB to $resolveditem"
 
         $ffmpeg_args = `
@@ -151,7 +151,7 @@ function Invoke-Normalize {
         if ($InPlace) {
             $backupItem = "$itemname-backup$itemextension"
             Rename-Item -LiteralPath $resolveditem -NewName $backupItem -ErrorAction Stop
-            Rename-Item -LiteralPath $tempfile -NewName $resolveditem -ErrorAction Stop
+            Move-Item -LiteralPath $tempfile -Destination $resolveditem -Force -ErrorAction Stop
             Remove-Item -LiteralPath $backupItem -ErrorAction SilentlyContinue
         }
     }
@@ -159,15 +159,39 @@ function Invoke-Normalize {
     end {}
 }
 
+<#
+.SYNOPSIS
+    Generate a media metadata report from a directory of audio files.
+.DESCRIPTION
+    Scans a directory recursively for MP3 and FLAC files and extracts metadata
+    (artist, album, title, year, genre, track, bitrate, duration, size) using
+    ffprobe. Returns grouped objects by default, or a full HTML report when
+    -HtmlOutput is specified.
+.PARAMETER Path
+    Directory to scan for audio files.
+.PARAMETER HtmlOutput
+    When present, outputs a self-contained HTML report string instead of
+    grouped PSCustomObjects.
+.EXAMPLE
+    Convert-MediaInfoToHtml -Path 'D:\Music\Album' | Format-Table
+.EXAMPLE
+    Convert-MediaInfoToHtml -Path 'D:\Music' -HtmlOutput | Set-Content report.html
+#>
 function Convert-MediaInfoToHtml {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string]$Path,
 
         [switch]$HtmlOutput
     )
 
+    begin {
+        Get-Command -Name 'ffprobe.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    }
+
+    process {
     function Format-Size {
         param(
             [Parameter(Mandatory)][double]$Bytes
@@ -295,12 +319,11 @@ $totalRow
 </body>
 </html>
 "@
+    } # end process
 }
 
 
 <#
-.SYNOPSIS
-    Convert audio/video files to MP3 using ffmpeg.
 .DESCRIPTION
     Wraps ffmpeg.exe to encode an input file to MP3 with variable bitrate
     quality settings. Supports pipeline input of file names and optional
@@ -315,7 +338,7 @@ $totalRow
     Overwrite existing output without prompting.
 #>
 function ConvertTo-Mp3 {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         # "transparent results":
         # 0 = 245 kbit/sec avg.
@@ -335,6 +358,7 @@ function ConvertTo-Mp3 {
     )
 
     begin {
+        Get-Command -Name 'ffmpeg.exe' -CommandType Application -ErrorAction Stop | Out-Null
         $count = 0
     }
 
@@ -375,8 +399,10 @@ function ConvertTo-Mp3 {
         # Output filename must be last argument.
         $ffmpeg_args += """$Destination"""
 
-        # ffmpeg always seems to return 0 in ExitCode, so no way to check for failures, even with "-PassThru".
-        Start-Process -FilePath 'ffmpeg.exe' -ArgumentList $ffmpeg_args -NoNewWindow -Wait
+        if ($PSCmdlet.ShouldProcess($InputFile, 'Convert to MP3')) {
+            # ffmpeg always seems to return 0 in ExitCode, so no way to check for failures, even with "-PassThru".
+            Start-Process -FilePath 'ffmpeg.exe' -ArgumentList $ffmpeg_args -NoNewWindow -Wait
+        }
 
         $count++
     }

@@ -1,11 +1,19 @@
 <#
 .SYNOPSIS
-Download best quality video and audio into default container.
+    Download best quality video and audio into default container.
 .NOTES
-yt-dlp now supports preset aliases: '-f mp3', '-f aac', '-t mp4', '-t mkv'
+    yt-dlp now supports preset aliases: '-f mp3', '-f aac', '-t mp4', '-t mkv'
+.PARAMETER Audio
+    Download audio only. Requires -Format.
+.PARAMETER Video
+    Download video with best available audio.
+.PARAMETER Uri
+    URL of the media to download.
+.PARAMETER Format
+    Audio format to extract when using -Audio (e.g. mp3, flac, wav).
 #>
 function Invoke-YtDlp {
-
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true, ParameterSetName = 'Audio')]
         [switch]$Audio,
@@ -22,6 +30,11 @@ function Invoke-YtDlp {
         [string]$Format
     )
 
+    begin {
+        Get-Command -Name 'yt-dlp.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    }
+
+    process {
     # If the Uri is a Facebook redirect, then parse the redirect query string to get the actual URL
     if (([Uri]$Uri).Host -like '*.facebook.com') {
         $Uri = [Web.HttpUtility]::ParseQueryString([Uri]([Web.HttpUtility]::UrlDecode($Uri)))[0]
@@ -81,15 +94,37 @@ function Invoke-YtDlp {
     $ytdlp_args += """$Uri"""
     Write-Verbose ('Arguments: {0}' -f ($ytdlp_args -join ' '))
     Start-Process -FilePath 'yt-dlp.exe' -ArgumentList $ytdlp_args -NoNewWindow -Wait
+    }
 }
 
 
 <#
 .SYNOPSIS
-Download file (including torrents) using ARIA
+    Download file (including torrents) using ARIA.
+.DESCRIPTION
+    Wraps aria2c.exe with sensible defaults for concurrent HTTP/FTP downloads
+    and BitTorrent. Supports resuming interrupted downloads, split connections,
+    and magnet links or torrent files in addition to plain URIs.
+.PARAMETER Source
+    The URI, magnet link, or path to a torrent/metalink file to download.
+.EXAMPLE
+    Invoke-Aria -Source 'https://example.com/file.zip'
+.EXAMPLE
+    Invoke-Aria -Source 'magnet:?xt=urn:btih:...'
 #>
 function Invoke-Aria {
-    param([Parameter(Mandatory)] [string]$Source)
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Source
+    )
+
+    begin {
+        Get-Command -Name 'aria2c.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    }
+
+    process {
     # Can also use "aria2.conf" file.
 
     $ariaArgs = @()
@@ -126,6 +161,7 @@ function Invoke-Aria {
         $Source
 
     Start-Process -FilePath 'aria2c.exe' -ArgumentList $ariaArgs -NoNewWindow -Wait
+    }
 }
 
 <#
@@ -217,6 +253,11 @@ function Get-WebPageBinaries {
         [int]$Depth = 1
     )
 
+    begin {
+        Get-Command -Name 'wget.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    }
+
+    process {
     wget.exe `
         --verbose `
         --no-parent `
@@ -228,6 +269,7 @@ function Get-WebPageBinaries {
         --accept=$($Extensions -join ',') `
         --user-agent='Mozilla/5.0 (iPhone; CPU iPhone OS 9_1 like Mac OS X) AppleWebKit/601.1 (KHTML, like Gecko) CriOS/52.0.2725.0 Mobile/13B143 Safari/601.1.46' `
         $Uri
+    } # end process
 }
 
 <#
@@ -235,28 +277,55 @@ function Get-WebPageBinaries {
     Download the latest PowerShell MSI release.
 .DESCRIPTION
     Queries the GitHub releases API for the latest PowerShell release and
-    downloads the x64 MSI installer to the specified folder.
+    downloads the x64 MSI installer to the specified folder. Progress
+    preference is suppressed during download for performance.
 .PARAMETER Folder
-    Destination directory where the MSI will be saved.
+    Destination directory where the MSI will be saved. Must already exist.
+.EXAMPLE
+    DownloadLatestPS -Folder 'C:\Downloads'
 #>
 function DownloadLatestPS {
+    [CmdletBinding()]
     param([Parameter(Mandatory = $true)] [string]$Folder)
 
     # Speed up Invoke-WebRequest calls
     $oldpp = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'
 
-    $json = (Invoke-WebRequest -uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest').Content | ConvertFrom-Json
+    try {
+        $json = (Invoke-WebRequest -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -ErrorAction Stop).Content | ConvertFrom-Json
+    }
+    catch {
+        throw "Failed to query GitHub releases API: $_"
+    }
+
     $psUri = [uri]($json.assets | Where-Object name -Like 'PowerShell-*-win-x64.msi').browser_download_url
 
     "Downloading: $($psUri.AbsoluteUri)"
 
-    Invoke-WebRequest $psUri.AbsoluteUri -OutFile (Join-Path $Folder $psuri.Segments[-1])
-    $ProgressPreference = $oldpp
+    try {
+        Invoke-WebRequest $psUri.AbsoluteUri -OutFile (Join-Path $Folder $psuri.Segments[-1]) -ErrorAction Stop
+    }
+    catch {
+        throw "Failed to download PowerShell MSI from '$($psUri.AbsoluteUri)': $_"
+    }
+    finally {
+        $ProgressPreference = $oldpp
+    }
 }
 
 
+<#
+.SYNOPSIS
+    Install the latest PowerShell release for the current architecture.
+.DESCRIPTION
+    Queries the PowerShell metadata API to determine the latest release version,
+    compares it to the running version, and silently downloads and launches the
+    MSI installer if an update is available.
+#>
 function Update-PowerShell {
+    [CmdletBinding()]
+    param()
     switch ($env:PROCESSOR_ARCHITECTURE) {
         "AMD64" { $architecture = "x64" }
         "x86" { $architecture = "x86" }
@@ -282,7 +351,7 @@ function Update-PowerShell {
     $prevProgressPreference = $global:ProgressPreference
     $global:ProgressPreference = 'SilentlyContinue'
     try {
-        $response = Invoke-WebRequest -Uri $downloadUri -OutFile $outFile
+        Invoke-WebRequest -Uri $downloadUri -OutFile $outFile
     }
     finally {
         $global:ProgressPreference = $prevProgressPreference

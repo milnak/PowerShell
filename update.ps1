@@ -18,6 +18,7 @@ Invoke-WingetUpdate
 Invoke-WingetUpdate -Force
 #>
 function Invoke-WingetUpdate {
+    [CmdletBinding()]
     Param([switch]$Force)
 
     if (-not (Get-Command -Name 'Get-WinGetPackageUpdate' -ErrorAction SilentlyContinue)) {
@@ -92,6 +93,7 @@ Invoke-ScoopUpdate
 Invoke-ScoopUpdate -Force
 #>
 function Invoke-ScoopUpdate {
+    [CmdletBinding()]
     Param([switch]$Force)
 
     if (-not (Get-Command -Name 'scoop.ps1' -CommandType ExternalScript -ErrorAction SilentlyContinue)) {

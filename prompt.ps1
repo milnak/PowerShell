@@ -1,4 +1,9 @@
+<#
+.SYNOPSIS
+    Truncate a filesystem path to fit within a maximum character length.
+#>
 function TruncatePath {
+    [CmdletBinding()]
     param([string]$Path, [int]$MaxChars = 80)
     $truncated = $Path
 

@@ -1,77 +1,157 @@
+<#
+.SYNOPSIS
+    Split a PDF into individual page files.
+.DESCRIPTION
+    Uses qpdf to split a PDF file into separate per-page PDF files named
+    with a numeric suffix (e.g. document-1.pdf, document-2.pdf, ...).
+.PARAMETER File
+    Path to the PDF file to split.
+.EXAMPLE
+    Invoke-PdfSplitPages -File 'document.pdf'
+.EXAMPLE
+    Get-ChildItem *.pdf | Invoke-PdfSplitPages
+#>
 function Invoke-PdfSplitPages {
-    param([Parameter(Mandatory)][string]$File)
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName')]
+        [string]$File
+    )
 
-    Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
+    begin {
+        Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
+    }
+    process {
+        $outputFilename = [IO.Path]::GetFileNameWithoutExtension($File)
+        $outputFilename += '-%d.pdf'
 
-    $outputFilename = [IO.Path]::GetFileNameWithoutExtension($File)
-    $outputFileName += '-%d.pdf'
+        Write-Host ''
+        Write-Host "`"$File`" --> `"$outputFilename`""
+        Write-Host ''
 
-    Write-Host ''
-    Write-Host "`"$File`" --> `"$outputFilename`""
-    Write-Host ''
-
-    $qpdfCmd = "qpdf.exe --split-pages=1-z `"$File`" `"$outputFilename`""
-
-    Invoke-Expression $qpdfCmd
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "qpdf failed with exit code $LASTEXITCODE"
+        if ($PSCmdlet.ShouldProcess($File, 'Split PDF pages')) {
+            & qpdf.exe --split-pages "1-z" $File $outputFilename
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "qpdf failed with exit code $LASTEXITCODE"
+            }
+        }
     }
 }
 
+<#
+.SYNOPSIS
+    Remove encryption from a PDF file.
+.DESCRIPTION
+    Uses qpdf to decrypt a PDF, writing the result with a -decrypted suffix.
+.PARAMETER File
+    Path to the encrypted PDF file.
+.EXAMPLE
+    Invoke-PdfDecrypt -File 'secure.pdf'
+.EXAMPLE
+    Get-ChildItem *.pdf | Invoke-PdfDecrypt
+#>
 function Invoke-PdfDecrypt {
-    param([Parameter(Mandatory)][string]$File)
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName')]
+        [string]$File
+    )
 
-    Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
+    begin {
+        Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
+    }
+    process {
+        $outputFilename = [IO.Path]::GetFileNameWithoutExtension($File)
+        $outputFilename += '-decrypted.pdf'
 
-    $outputFilename = [IO.Path]::GetFileNameWithoutExtension($File)
-    $outputFilename += '-decrypted.pdf'
+        Write-Host ''
+        Write-Host "`"$File`" --> `"$outputFilename`""
+        Write-Host ''
 
-    Write-Host ''
-    Write-Host "`"$PdfFile`" --> `"$outputFilename`""
-    Write-Host ''
-
-    & qpdf.exe --decrypt "$File" "$outputFilename"
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "qpdf failed with exit code $LASTEXITCODE"
+        if ($PSCmdlet.ShouldProcess($File, 'Decrypt PDF')) {
+            & qpdf.exe --decrypt "$File" "$outputFilename"
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "qpdf failed with exit code $LASTEXITCODE"
+            }
+        }
     }
 }
 
+<#
+.SYNOPSIS
+    Merge multiple PDF files into a single PDF.
+.DESCRIPTION
+    Finds all PDF files matching a given filename prefix, sorts them by name,
+    and uses qpdf to merge them into one output file with a -merged suffix.
+.PARAMETER File
+    Filename prefix used to match PDFs (e.g. 'chapter' matches 'chapter*.pdf').
+.EXAMPLE
+    Invoke-PdfMerge -File 'chapter'
+#>
 function Invoke-PdfMerge {
-    param([Parameter(Mandatory)][string]$File)
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)]
+        [string]$File
+    )
 
-    Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
-
-    $pdfList = Get-ChildItem -Filter "${File}*.pdf" | Sort-Object Name | Select-Object -ExpandProperty Name
-    if ($pdfList.Count -eq 0) {
-        Write-Host "No files matching ${File}*.pdf found."
-        exit
+    begin {
+        Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
     }
+    process {
+        $pdfList = Get-ChildItem -Filter "${File}*.pdf" | Sort-Object Name | Select-Object -ExpandProperty Name
+        if ($pdfList.Count -eq 0) {
+            Write-Warning "No files matching ${File}*.pdf found."
+            return
+        }
 
-    $pdfListString = $pdfList -join ' '
+        $outputFilename = $File
+        $outputFilename += '-merged.pdf'
 
-    $outputFilename = $File
-    $outputFilename += '-merged.pdf'
+        Write-Host ''
+        Write-Host "`"$File*.pdf`" --> `"$outputFilename`""
+        Write-Host ''
 
-    Write-Host ''
-    Write-Host "`"$File*.pdf`" --> `"$outputFilename`""
-    Write-Host ''
-
-    $qpdfCmd = "qpdf.exe --empty --pages $pdfListString 1-z -- `"$outputFilename`""
-
-    Invoke-Expression $qpdfCmd
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "qpdf failed with exit code $LASTEXITCODE"
+        if ($PSCmdlet.ShouldProcess($outputFilename, 'Merge PDFs')) {
+            $qpdfArgs = @('--empty', '--pages') + ($pdfList | ForEach-Object { $_, '1-z' }) + @('--', $outputFilename)
+            & qpdf.exe @qpdfArgs
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "qpdf failed with exit code $LASTEXITCODE"
+            }
+        }
     }
-
 }
 
 
+<#
+.SYNOPSIS
+    List bookmarks (outlines) from a PDF file.
+.DESCRIPTION
+    Uses qpdf's JSON output to extract the page numbers and titles of all
+    bookmark entries (document outlines) in a PDF.
+.PARAMETER File
+    Path to the PDF file to inspect.
+.EXAMPLE
+    Get-PdfBookmarks -File 'document.pdf'
+.EXAMPLE
+    Get-ChildItem *.pdf | Get-PdfBookmarks
+#>
 function Get-PdfBookmarks {
-    param([Parameter(Mandatory)][string]$File)
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName')]
+        [string]$File
+    )
 
-    Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
-
-    $json = qpdf.exe --json $File | ConvertFrom-Json
-    $json.pages | Where-Object { $_.outlines.title } `
-    | Select-Object -Property @{Name = 'Page'; Expression = { $_.pageposfrom1 } }, @{Name = 'Title'; Expression = { $_.outlines.title } }
+    begin {
+        Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
+    }
+    process {
+        $json = qpdf.exe --json $File | ConvertFrom-Json
+        $json.pages | Where-Object { $_.outlines.title } `
+        | Select-Object -Property @{Name = 'Page'; Expression = { $_.pageposfrom1 } }, @{Name = 'Title'; Expression = { $_.outlines.title } }
+    }
 }

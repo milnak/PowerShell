@@ -12,7 +12,7 @@
 function Write-BoxedMessage {
     Param(
         [Parameter(Mandatory)][string]$Message,
-        [ValidateRange(30, 37)][string]$ColorCode = 34
+        [ValidateRange(30, 37)][int]$ColorCode = 34
     )
 
     $Color = "`e[0;${ColorCode}m"
@@ -38,6 +38,7 @@ function Write-BoxedMessage {
     Directory path to create and enter.
 #>
 function mdcd {
+    [CmdletBinding()]
     Param([Parameter(Mandatory)][string]$Path)
 
     if (New-Item -Path $Path -ItemType Directory -Force) {
@@ -76,7 +77,9 @@ function Write-Figlet {
         [string]$FontName = 'small'
     )
 
-    begin {}
+    begin {
+        Get-Command -Name 'figlet.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    }
     process {
         foreach ($line in $Message) {
             figlet.exe -w $OutputWidth -f $FontName $line | ForEach-Object {
@@ -85,7 +88,6 @@ function Write-Figlet {
             $CommentIndicator
         }
     }
-    end {}
 }
 
 
@@ -197,6 +199,5 @@ function Write-Bold {
         }
     }
 
-    end {}
 }
 

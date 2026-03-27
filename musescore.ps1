@@ -47,13 +47,19 @@ function ConvertFrom-MuseScore {
         [string]$MuseScorePath = (Join-Path "$env:ProgramFiles" 'MuseScore 4\bin\MuseScore4.exe')
     )
 
+    begin {
+        if (-not (Test-Path -LiteralPath $MuseScorePath -PathType Leaf)) {
+            throw "MuseScore executable not found: $MuseScorePath"
+        }
+    }
+
     process {
         $path = Resolve-Path -LiteralPath $File -ErrorAction Stop
 
         Write-Host ('Processing "{0}"...' -f $path)
 
         Write-Host '* Extracting JSON'
-        $musescoreJsonFile = 'musescore-score-parts.json'
+        $musescoreJsonFile = [IO.Path]::Combine([IO.Path]::GetTempPath(), "musescore-$([IO.Path]::GetRandomFileName()).json")
         $process = Start-Process -Wait -NoNewWindow -PassThru `
             -WorkingDirectory (Get-Location).Path `
             -FilePath """$MuseScorePath""" `
@@ -63,6 +69,11 @@ function ConvertFrom-MuseScore {
         }
 
         $musescoreJson = Get-Content $musescoreJsonFile | ConvertFrom-Json
+        if ([string]::IsNullOrEmpty($musescoreJson.score)) {
+            Write-Warning "Unexpected JSON output from MuseScore; 'score' field is missing or empty. Skipping '$File'."
+            Remove-Item -LiteralPath $musescoreJsonFile -ErrorAction SilentlyContinue
+            return
+        }
         $name = Split-Path -LeafBase $musescoreJson.score
 
         if ('Score' -in $Extract) {
