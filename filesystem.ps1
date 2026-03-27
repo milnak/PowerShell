@@ -102,6 +102,35 @@ function rgrep {
     Get-ChildItem -Recurse -File -Filter $Files | Select-String -Pattern $Pattern
 }
 
+<#
+.SYNOPSIS
+    Compute SHA256 hashes similar to UNIX sha256sum.
+.DESCRIPTION
+    Takes file paths from pipeline or arguments, outputs lowercase hash and
+    relative path, separated by ' *' like the UNIX tool.
+.PARAMETER Files
+    One or more file paths to hash.
+#>
+function Get-FileSha256Hash {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName', 'Path')]
+        [string]$File
+    )
+
+    begin {}
+    process {
+        $target = (Resolve-Path $File).Path
+        Write-Verbose "Hashing $File"
+        # Get-ChildItem -Recurse -File | ForEach-Object {
+        '{0} *{1}' -f (Get-FileHash -Algorithm SHA256 -LiteralPath $target).Hash.ToLower(), (Resolve-Path -Relative $target).Substring(2) -replace '\\', '/'
+    }
+    end {}
+    clean {}
+
+}
+
 
 <#
 .SYNOPSIS
@@ -156,9 +185,9 @@ function Invoke-DU {
 
     process {
         du.exe -nobanner -c -l 1 $Path
-  | ConvertFrom-Csv
-  | Sort-Object -Descending { [uint64]$_.DirectorySizeOnDisk }
-  | Select-Object -First 15 @{ Name = 'Size'; Expression = { '{0,15:N0}' -f [uint64]$_.DirectorySizeOnDisk } }, Path
+        | ConvertFrom-Csv
+        | Sort-Object -Descending { [uint64]$_.DirectorySizeOnDisk }
+        | Select-Object -First 15 @{ Name = 'Size'; Expression = { '{0,15:N0}' -f [uint64]$_.DirectorySizeOnDisk } }, Path
     }
 }
 

@@ -236,36 +236,6 @@ function Get-JJazzLabMeta {
 
 <#
 .SYNOPSIS
-    Compute SHA256 hashes similar to UNIX sha256sum.
-.DESCRIPTION
-    Takes file paths from pipeline or arguments, outputs lowercase hash and
-    relative path, separated by ' *' like the UNIX tool.
-.PARAMETER Files
-    One or more file paths to hash.
-#>
-function Invoke-Sha256Hash {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
-        [string[]]$Files
-    )
-
-    begin {}
-    process {
-        foreach ($file in $Files) {
-            $target = (Resolve-Path $file).Path
-            Write-Verbose "Hashing $file"
-            # Get-ChildItem -Recurse -File | ForEach-Object {
-            '{0} *{1}' -f (Get-FileHash -Algorithm SHA256 -LiteralPath $target).Hash.ToLower(), (Resolve-Path -Relative $target).Substring(2) -replace '\\', '/'
-        }
-    }
-    end {}
-    clean {}
-
-}
-
-<#
-.SYNOPSIS
     Create a backup archive using 7-Zip.
 .DESCRIPTION
     Uses 7z.exe to recursively add files from a source path into a
