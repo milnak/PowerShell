@@ -55,31 +55,6 @@ function Show-ColorTable {
 
 <#
 .SYNOPSIS
-    Download the latest PowerShell MSI release.
-.DESCRIPTION
-    Queries the GitHub releases API for the latest PowerShell release and
-    downloads the x64 MSI installer to the specified folder.
-.PARAMETER Folder
-    Destination directory where the MSI will be saved.
-#>
-function DownloadLatestPS {
-    param([Parameter(Mandatory = $true)] [string]$Folder)
-
-    # Speed up Invoke-WebRequest calls
-    $oldpp = $ProgressPreference
-    $ProgressPreference = 'SilentlyContinue'
-
-    $json = (Invoke-WebRequest -uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest').Content | ConvertFrom-Json
-    $psUri = [uri]($json.assets | Where-Object name -Like 'PowerShell-*-win-x64.msi').browser_download_url
-
-    "Downloading: $($psUri.AbsoluteUri)"
-
-    Invoke-WebRequest $psUri.AbsoluteUri -OutFile (Join-Path $Folder $psuri.Segments[-1])
-    $ProgressPreference = $oldpp
-}
-
-<#
-.SYNOPSIS
     Launch notepad4.
 .DESCRIPTION
     Starts the notepad4 executable, forwarding any provided arguments.
@@ -424,94 +399,6 @@ function Invoke-IpFilterUpdate {
 
 <#
 .SYNOPSIS
-    Convert audio/video files to MP3 using ffmpeg.
-.DESCRIPTION
-    Wraps ffmpeg.exe to encode an input file to MP3 with variable bitrate
-    quality settings. Supports pipeline input of file names and optional
-    output filename specification.
-.PARAMETER Quality
-    Numeric quality level (0–9) controlling bitrate; lower is higher quality.
-.PARAMETER InputFile
-    Path of the source file to convert. Can be piped in.
-.PARAMETER OutputFile
-    Destination MP3 file; if omitted, derived from input name.
-.PARAMETER Force
-    Overwrite existing output without prompting.
-#>
-function ConvertTo-Mp3 {
-    [CmdletBinding()]
-    param (
-        # "transparent results":
-        # 0 = 245 kbit/sec avg.
-        # 1 = 225 kbit/sec avg..
-        # 2 = 190 kbit/sec avg. (170-210 kbit/sec). See https://trac.ffmpeg.org/wiki/Encode/MP3
-        # 3 = 175 kbit/sec avg.
-        [ValidateRange(0, 9)][int]$Quality = 2,
-        # Input file name. Can also use "-FullName" for piping from "Get-ChildItem -File"
-        [Parameter(Mandatory, Position = 0, ValueFromPipelineByPropertyName)]
-        [Alias('FullName')]
-        [string] $InputFile,
-        # Output file name. If not specified, uses <name>.mp3 in current directory.
-        [Parameter(Position = 1)]
-        [string] $OutputFile,
-        # Force overwriting files that exist.
-        [switch]$Force
-    )
-
-    begin {
-        $count = 0
-    }
-
-    process {
-        # Don't modify $OutputFile, as we will check it against null with each new file.
-        $Destination = $OutputFile
-
-        if (-not $OutputFile) {
-            $Destination = ('{0}.mp3' -f (Split-Path -Path $InputFile -LeafBase))
-        }
-
-        if ((Split-Path -Path $Destination -Extension) -ne '.mp3') {
-            throw 'Extension must be .mp3'
-        }
-
-        'Converting "{0}" to "{1}".' -f (Split-Path -Path $InputFile -Leaf), (Split-Path -Path $Destination -Leaf)
-
-        # -hide_banner  Suppress printing banner.
-        # -loglevel     Set logging level and flags used by the library.
-        # -stats        Log encoding progress/statistics as "info"-level log
-        # -i            input file url
-        # -vn           blocks all video streams of a file from being filtered or being automatically selected or mapped for any output.
-        # -codec:a      Select an encoder. "a" is stream_specifier, followed by codec name.
-        # -qscale:a     Specify codec-dependent fixed quality scale (VBR). "a" is stream_specifier, followed by q value.
-        $ffmpeg_args = `
-            '-hide_banner', `
-            '-loglevel', 'error', `
-            '-stats', `
-            '-i', """$InputFile""", `
-            '-vn', `
-            '-codec:a', 'libmp3lame', `
-            '-qscale:a', $Quality
-
-        if ($Force) {
-            $ffmpeg_args += '-y'
-        }
-
-        # Output filename must be last argument.
-        $ffmpeg_args += """$Destination"""
-
-        # ffmpeg always seems to return 0 in ExitCode, so no way to check for failures, even with "-PassThru".
-        Start-Process -FilePath 'ffmpeg.exe' -ArgumentList $ffmpeg_args -NoNewWindow -Wait
-
-        $count++
-    }
-
-    end {
-        "Processed $count files."
-    }
-}
-
-<#
-.SYNOPSIS
     Format a PowerShell script file using PowerShell-Beautifier.
 .DESCRIPTION
     Installs the PowerShell-Beautifier module if needed and runs
@@ -613,6 +500,97 @@ function Get-SystemInfo {
     }
 }
 
+<#
+.SYNOPSIS
+    Push the profile directory onto the location stack.
+#>
+function Push-ProfileLocation {
+    Push-Location -LiteralPath (Split-Path -LiteralPath $PROFILE)
+}
+
+<#
+.SYNOPSIS
+Generates a GUID in various C/C++/Registry/Attribute formats.
+
+.PARAMETER Type
+Specifies the output format:
+Ole, Define, Struct, Registry, AttributeBracket, AttributeBrace
+
+.EXAMPLE
+New-GuidFormat Ole
+
+.EXAMPLE
+New-GuidFormat Registry
+#>
+function New-GuidFormat {
+    [CmdletBinding()]
+    param (
+        [ValidateSet('Ole', 'Define', 'Struct', 'Registry', 'AttributeBracket', 'AttributeBrace')]
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Type
+    )
+
+    function New-GuidObject {
+        $guid = (New-Guid).Guid
+        $m = Select-String `
+            -InputObject $guid `
+            -Pattern '([0-9A-Fa-f]{8})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})-([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})'
+
+        [PSCustomObject]@{
+            Guid    = $guid.ToUpper()
+            Data1   = $m.Matches.Groups[1].Value
+            Data2   = $m.Matches.Groups[2].Value
+            Data3   = $m.Matches.Groups[3].Value
+            Data4_1 = $m.Matches.Groups[4].Value
+            Data4_2 = $m.Matches.Groups[5].Value
+            Data4_3 = $m.Matches.Groups[6].Value
+            Data4_4 = $m.Matches.Groups[7].Value
+            Data4_5 = $m.Matches.Groups[8].Value
+            Data4_6 = $m.Matches.Groups[9].Value
+            Data4_7 = $m.Matches.Groups[10].Value
+            Data4_8 = $m.Matches.Groups[11].Value
+        }
+    }
+
+    switch ($Type) {
+        'Ole' {
+            $guid = New-GuidObject
+            "// {{{0}}}`nIMPLEMENT_OLECREATE(<<class>>, <<external_name>>,`n0x{1}, 0x{2}, 0x{3}, 0x{4}, 0x{5}, 0x{6}, 0x{7}, 0x{8}, 0x{9}, 0x{10}, 0x{11});" -f `
+                $guid.Guid, $guid.Data1, $guid.Data2, $guid.Data3,
+            $guid.Data4_1, $guid.Data4_2, $guid.Data4_3, $guid.Data4_4,
+            $guid.Data4_5, $guid.Data4_6, $guid.Data4_7, $guid.Data4_8
+        }
+
+        'Define' {
+            $guid = New-GuidObject
+            "// {{{0}}}`nDEFINE_GUID(<<name>>,`n0x{1}, 0x{2}, 0x{3}, 0x{4}, 0x{5}, 0x{6}, 0x{7}, 0x{8}, 0x{9}, 0x{10}, 0x{11});" -f `
+                $guid.Guid, $guid.Data1, $guid.Data2, $guid.Data3,
+            $guid.Data4_1, $guid.Data4_2, $guid.Data4_3, $guid.Data4_4,
+            $guid.Data4_5, $guid.Data4_6, $guid.Data4_7, $guid.Data4_8
+        }
+
+        'Struct' {
+            $guid = New-GuidObject
+            "/* {{{0}}} */`nstatic const GUID <<name>> =`n{{ 0x{1}, 0x{2}, 0x{3}, {{ 0x{4}, 0x{5}, 0x{6}, 0x{7}, 0x{8}, 0x{9}, 0x{10}, 0x{11} }} }};" -f `
+                $guid.Guid, $guid.Data1, $guid.Data2, $guid.Data3,
+            $guid.Data4_1, $guid.Data4_2, $guid.Data4_3, $guid.Data4_4,
+            $guid.Data4_5, $guid.Data4_6, $guid.Data4_7, $guid.Data4_8
+        }
+
+        'Registry' {
+            '{{{0}}}' -f (New-GuidObject).Guid
+        }
+
+        'AttributeBracket' {
+            '[Guid("{0}")]' -f (New-GuidObject).Guid
+        }
+
+        'AttributeBrace' {
+            '<Guid("{0}")>' -f (New-GuidObject).Guid
+        }
+    }
+}
+
 #######################################################################################################################
 #             _
 #  _ __  __ _(_)_ _
@@ -620,7 +598,21 @@ function Get-SystemInfo {
 # |_|_|_\__,_|_|_||_|
 #
 
-'download', 'filesystem', 'git', 'messages', 'musescore', 'normalize', 'pdf', 'prompt', 'transcribe', 'update', 'vscode' `
+# Load external functions
+
+'audio', `
+    'download', `
+    'filesystem', `
+    'git', `
+    'mame', `
+    'messages', `
+    'musescore', `
+    'pdf', `
+    'prompt', `
+    'sibelius', `
+    'transcribe', `
+    'update', `
+    'vscode' `
 | ForEach-Object {
     "Loading functions from $_.ps1"
     . "$PSScriptRoot\$_.ps1"

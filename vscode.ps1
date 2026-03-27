@@ -20,7 +20,7 @@ function Invoke-Code {
     )
 
     begin {
-        Write-Verbose 'Invoke-Code: begin'
+        Write-Verbose '[Invoke-Code] begin'
 
         # Fail fast if $CodeCommand can't be located.
         Get-Command -Name $CodeCommand -CommandType Application -ErrorAction Stop | Out-Null
@@ -29,12 +29,12 @@ function Invoke-Code {
     }
 
     process {
-        Write-Verbose 'Invoke-Code: process'
+        Write-Verbose '[Invoke-Code] process'
 
         foreach ($item in $Path) {
             # if ($item -notmatch '[\*\?]' -and -not (Test-Path $item -PathType Leaf)) {
             $resolvedPath = Resolve-Path -Path $item -ErrorAction SilentlyContinue
-            if (-not $resolvedPath) {
+            if (-not $resolvedPath -or (Test-Path -LiteralPath $resolvedPath -PathType Container -ErrorAction SilentlyContinue)) {
                 # Add directory names or files that don't exist as-is
                 if ($PSCmdlet.ShouldProcess($item, 'Edit with code')) {
                     Write-Verbose "Adding non-existent file: $item"
@@ -54,7 +54,7 @@ function Invoke-Code {
     }
 
     end {
-        Write-Verbose 'Invoke-Code: end'
+        Write-Verbose '[Invoke-Code] end'
 
         if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('WhatIf')) {
             # -WhatIf requires no additional processing.

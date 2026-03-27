@@ -128,6 +128,79 @@ function Invoke-Aria {
     Start-Process -FilePath 'aria2c.exe' -ArgumentList $ariaArgs -NoNewWindow -Wait
 }
 
+<#
+.SYNOPSIS
+Downloads a webpage (and its requisites) into a timestamped folder using wget.
+
+.PARAMETER Domain
+The domain name to download, e.g. "example.com".
+
+.PARAMETER WgetCommand
+Path or name of the wget executable. Defaults to "wget.exe".
+
+.EXAMPLE
+Get-WebPage -Domain "example.com"
+
+.EXAMPLE
+Get-WebPage -Domain "mysite.org" -WgetCommand "C:\Tools\wget.exe"
+#>
+
+function Get-WebPage {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [string]$Domain,
+
+        [string]$WgetCommand = 'wget.exe'
+    )
+
+    # Validate wget exists
+    try {
+        $null = Get-Command -Name $WgetCommand -CommandType Application -ErrorAction Stop
+    }
+    catch {
+        throw "wget command not found: $WgetCommand"
+    }
+
+    # Build target folder name
+    $TargetPath = '{0}_{1}' -f $Domain, (Get-Date -Format 'yyMMdd')
+
+    if (Test-Path -LiteralPath $TargetPath) {
+        throw "Target path '$TargetPath' already exists."
+    }
+
+    # Create folder
+    $null = New-Item -ItemType Directory -Path $TargetPath -ErrorAction Stop
+
+    Push-Location $TargetPath
+    try {
+        # Build wget arguments
+        $wgetArgs = @(
+            '--exclude-domains=googleapis.com,youtube.com'
+            '--span-hosts'
+            '--convert-links'
+            '--level=inf'
+            '--no-verbose'
+            '--page-requisites'
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36 Edge/15.15063'
+            "http://$Domain"
+        )
+
+        # Run wget
+        $process = Start-Process -FilePath $WgetCommand `
+            -ArgumentList $wgetArgs `
+            -NoNewWindow `
+            -Wait `
+            -PassThru
+
+        if ($process.ExitCode -ne 0) {
+            throw "wget failed with exit code $($process.ExitCode)"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
 
 <#
 .SYNOPSIS
@@ -157,6 +230,32 @@ function Get-WebPageBinaries {
         $Uri
 }
 
+<#
+.SYNOPSIS
+    Download the latest PowerShell MSI release.
+.DESCRIPTION
+    Queries the GitHub releases API for the latest PowerShell release and
+    downloads the x64 MSI installer to the specified folder.
+.PARAMETER Folder
+    Destination directory where the MSI will be saved.
+#>
+function DownloadLatestPS {
+    param([Parameter(Mandatory = $true)] [string]$Folder)
+
+    # Speed up Invoke-WebRequest calls
+    $oldpp = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
+
+    $json = (Invoke-WebRequest -uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest').Content | ConvertFrom-Json
+    $psUri = [uri]($json.assets | Where-Object name -Like 'PowerShell-*-win-x64.msi').browser_download_url
+
+    "Downloading: $($psUri.AbsoluteUri)"
+
+    Invoke-WebRequest $psUri.AbsoluteUri -OutFile (Join-Path $Folder $psuri.Segments[-1])
+    $ProgressPreference = $oldpp
+}
+
+
 function Update-PowerShell {
     switch ($env:PROCESSOR_ARCHITECTURE) {
         "AMD64" { $architecture = "x64" }
@@ -180,7 +279,7 @@ function Update-PowerShell {
     $downloadUri = "https://github.com/PowerShell/PowerShell/releases/download/$packagePath"
     $outFile = Join-Path -Path $env:tmp -ChildPath $packageName
 
-        $prevProgressPreference = $global:ProgressPreference
+    $prevProgressPreference = $global:ProgressPreference
     $global:ProgressPreference = 'SilentlyContinue'
     try {
         $response = Invoke-WebRequest -Uri $downloadUri -OutFile $outFile

@@ -241,3 +241,52 @@ function Invoke-GitDown {
 
     Invoke-GitDownHelper -Author $Author -Repository $Repository -Branch $Branch -ResourcePath $ResourcePath
 }
+
+<#
+.DESCRIPTION
+Formats and outputs the Git configuration in a structured manner.
+.EXAMPLE
+.\Format-GitConfig.ps1
+Outputs the Git configuration grouped by sections and sorted.
+#>
+function Format-GitConfig {
+    $config = foreach ($line in git.exe --no-pager config --global --list | Sort-Object -Unique) {
+        if ($line -match '^\s*(?<section>\w*)\.(?<subsection>\w*)\.(?<key>\w*)\s*=\s*(?<value>.+)') {
+            # e.g. difftool.winmerge.name=WinMerge
+            [PSCustomObject]@{
+                Section    = $matches['section']
+                Subsection = $matches['subsection']
+                Key        = $matches['key']
+                Value      = $matches['value']
+            }
+        }
+        elseif ($line -match '^\s*(?<section>\w*)\.(?<key>\w*)\s*=\s*(?<value>.+)') {
+            # e.g. color.ui=auto
+            [PSCustomObject]@{
+                Section    = $matches['section']
+                Subsection = $null
+                Key        = $matches['key']
+                Value      = $matches['value']
+            }
+        }
+        else {
+            Write-Warning "Invalid line? $line"
+        }
+
+    }
+
+    # $config | Sort-Object Section, Variable | Format-List; return
+
+    foreach ($line in $config | Group-Object -Property Section, SubSection | Sort-Object Name) {
+        $section, $subsection = $line.Group[0].Section, $line.Group[0].Subsection
+        if ($subsection) {
+            "[$section ""$subsection""]"
+        }
+        else {
+            "[$section]"
+        }
+        foreach ($item in $line.Group) {
+            "`t{0} = {1}" -f $item.Key, $item.Value
+        }
+    }
+}

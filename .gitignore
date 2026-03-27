@@ -3,7 +3,8 @@
 
 *
 !.gitignore
+!.github/
+!.github/*
 !*.ps1
-powershell.config.json
-
+!powershell.config.json
 
