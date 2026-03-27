@@ -29,14 +29,14 @@ function Read-Xsc {
             # [Signature] Document Version
             '^XSC Transcribe.Document Version (\d+\.\d+)' {
                 $version = $matches[1]
-                Write-Host "XSC Version: $version"
+                Write-Verbose "XSC Version: $version"
                 continue
             }
 
             # [Signature] System Info (transcribe platform,v_major,v_minor,?,?,?
             '^Transcribe!,(.+)$' {
                 $transcribe = $matches[1]
-                Write-Host "Transcribe Info: $transcribe"
+                Write-Verbose "Transcribe Info: $transcribe"
                 continue
             }
 
@@ -151,7 +151,7 @@ function Invoke-FixXsc {
     )
 
     begin {
-        Write-Host "Starting XSC processing..."
+        Write-Verbose "Starting XSC processing..."
     }
 
     process {
@@ -177,7 +177,6 @@ function Invoke-FixXsc {
             $xsc.Data['View0']['ViewSplitterPos'] = '0.79'
             $xsc.Data['View0']['HorizProfileZoom'] = '0.01'
 
-            Write-Host "Writing fixed XSC file to: $File"
             Write-Xsc -XSC $xsc | Out-File -LiteralPath $File
         }
         catch {
@@ -186,6 +185,6 @@ function Invoke-FixXsc {
     }
 
     end {
-        Write-Host "Finished XSC processing."
+        Write-Verbose 'Finished XSC processing.'
     }
 }
