@@ -11,8 +11,10 @@ function Invoke-Code {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         # Files to edit. Wildcards supported.
-        [Parameter(Mandatory, Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
-        [string[]]$Path,
+        # Accept filenames from the pipeline
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName', 'Path')]
+        [string]$File,
         # Whether to create a new VSCode instance.
         [switch]$NewWindow,
         # Command to launch code. Typically 'code.cmd'
@@ -31,23 +33,21 @@ function Invoke-Code {
     process {
         Write-Verbose '[Invoke-Code] process'
 
-        foreach ($item in $Path) {
-            # if ($item -notmatch '[\*\?]' -and -not (Test-Path $item -PathType Leaf)) {
-            $resolvedPath = Resolve-Path -Path $item -ErrorAction SilentlyContinue
-            if (-not $resolvedPath -or (Test-Path -LiteralPath $resolvedPath -PathType Container -ErrorAction SilentlyContinue)) {
-                # Add directory names or files that don't exist as-is
-                if ($PSCmdlet.ShouldProcess($item, 'Edit with code')) {
-                    Write-Verbose "Adding non-existent file: $item"
-                    $codeArgs += $item
-                }
+        $resolvedPath = Resolve-Path -Path $File -ErrorAction SilentlyContinue
+        if (-not $resolvedPath -and $File -notmatch '[\*\?]' -and -not (Test-Path -LiteralPath $resolvedPath -PathType Leaf -ErrorAction SilentlyContinue)) {
+            # Add directory names or files that don't exist as-is
+            if ($PSCmdlet.ShouldProcess($File, 'Edit with code')) {
+                Write-Verbose "Adding non-existent file: $File"
+                $codeArgs += $File
             }
-            else {
-                # Support wildcards
-                Get-ChildItem -Path $item | Select-Object -ExpandProperty FullName | ForEach-Object {
-                    if ($PSCmdlet.ShouldProcess($_, 'Edit with code')) {
-                        Write-Verbose "Adding file: $_"
-                        $codeArgs += $_
-                    }
+        }
+        else {
+            # Support wildcards
+            Write-Verbose "Resolving path: $File"
+            Get-ChildItem -Path $File | Select-Object -ExpandProperty FullName | ForEach-Object {
+                if ($PSCmdlet.ShouldProcess($_, 'Edit with code')) {
+                    Write-Verbose "Adding file: $_"
+                    $codeArgs += $_
                 }
             }
         }

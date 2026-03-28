@@ -132,84 +132,94 @@ Compares the local MAME version (from mame.exe -version) with the latest
 GitHub release. If a newer version exists, downloads the self‑extracting
 binary and extracts it using 7‑Zip.
 
+.PARAMETER Path
+Directory containing mame.exe. Defaults to the current directory.
+
 .EXAMPLE
 Invoke-MameUpdate
+
+.EXAMPLE
+Invoke-MameUpdate -Path 'D:\MAME'
 #>
-function Invoke-MameUpdate {
-    [CmdletBinding()]
+function Update-MAME {
+    [CmdletBinding(SupportsShouldProcess)]
     param()
 
-    # Ensure 7z exists
-    try {
-        $null = Get-Command -Name '7z.exe' -CommandType Application -ErrorAction Stop
-    }
-    catch {
-        throw "7z.exe not found in PATH."
-    }
+    $mameExe = './mame.exe'
 
-    # Ensure mame.exe exists and extract version
-    try {
-        $output = ./mame.exe -version
+    # Ensure 7z exists
+    $null = Get-Command -Name '7z.exe' -CommandType Application -ErrorAction Stop
+
+    # If mame.exe doesn't exist, prompt for fresh install
+    if (-not (Test-Path -LiteralPath $mameExe -PathType Leaf)) {
+        $choice = Read-Host 'MAME is not installed. Install latest version? (y/n)'
+        if ($choice -ne 'y') {
+            return
+        }
+        $output = '0.0 (mame0)'
     }
-    catch {
-        throw "Unable to run mame.exe. Ensure it exists in the current directory."
+    else {
+        $output = & $mameExe -version
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host -ForegroundColor Red "mame.exe exited with code $LASTEXITCODE."
+            return
+        }
     }
 
     if ($output -notmatch '(?<friendly>\d+\.\d+)\s+\((?<version>mame\d+)\)') {
-        throw "Unable to determine local MAME version from output: $output"
+        Write-Host -ForegroundColor Red "Unable to determine local MAME version from output: $output"
+        return
     }
 
     $localFriendly = $matches['friendly']
     $localVersion = $matches['version']
 
-    Write-Host "Local MAME version: $localFriendly ($localVersion)"
+    Write-Verbose "Local MAME version: $localFriendly ($localVersion)"
 
     # Query GitHub API
-    try {
-        $response = Invoke-WebRequest -Uri 'https://api.github.com/repos/mamedev/mame/releases/latest' -ErrorAction Stop
-        $json = $response.Content | ConvertFrom-Json
-    }
-    catch {
-        throw "Failed to query GitHub API for latest MAME release."
+    $response = Invoke-RestMethod -Uri 'https://api.github.com/repos/mamedev/mame/releases/latest' -ErrorAction Stop
+    $remoteVersion = $response.tag_name  # e.g. mame0276
+
+    Write-Verbose "Latest available version: $remoteVersion"
+
+    if ($localVersion -eq $remoteVersion) {
+        Write-Host -ForegroundColor Green 'MAME is already up to date.'
+        return
     }
 
     # Find Windows x64 self‑extracting binary
-    $asset = $json.assets | Where-Object name -like 'mame*_x64.exe' | Select-Object -First 1
+    $asset = $response.assets | Where-Object name -like 'mame*_x64.exe' | Select-Object -First 1
     if (-not $asset) {
         throw "Unable to locate Windows x64 MAME binary in latest release."
     }
 
     $url = $asset.browser_download_url
-    $remoteVersion = ([uri]$url).Segments[-1].Split('_')[0]  # e.g. mame0276
 
-    Write-Host "Latest available version: $remoteVersion"
-
-    if ($localVersion -eq $remoteVersion) {
-        Write-Host "MAME is already up to date."
+    if (-not $PSCmdlet.ShouldProcess("MAME in $Path", "Update from $localVersion to $remoteVersion")) {
         return
     }
 
-    # Download new version
-    $tempFile = New-TemporaryFile
-    Write-Host "Downloading $remoteVersion to $tempFile ..."
+    # Download new version to a temp .exe file
+    $tempFile = Join-Path ([IO.Path]::GetTempPath()) "$remoteVersion`_x64.exe"
+    Write-Verbose "Downloading $remoteVersion to $tempFile ..."
     Invoke-WebRequest -Uri $url -OutFile $tempFile -ErrorAction Stop
 
     # Extract
-    $targetPath = (Get-Location).Path
-    Write-Host "Extracting into $targetPath ..."
-
+    Write-Verbose "Extracting into $Path ..."
     try {
-        Start-Process -FilePath '7z.exe' `
-            -ArgumentList 'x', '-bso0', '-y', "-o$targetPath", $tempFile `
-            -Wait -NoNewWindow
-    }
-    catch {
-        throw "Extraction failed using 7z.exe."
+        $proc = Start-Process -FilePath '7z.exe' `
+            -ArgumentList 'x', '-bso0', '-y', "-o$Path", $tempFile `
+            -Wait -NoNewWindow -PassThru -Confirm:$false
+
+        if ($proc.ExitCode -ne 0) {
+            Write-Host -ForegroundColor Red "7z.exe exited with code $($proc.ExitCode)."
+            return
+        }
     }
     finally {
-        Write-Host "Cleaning up temporary file..."
-        Remove-Item -LiteralPath $tempFile -ErrorAction SilentlyContinue
+        Write-Verbose 'Cleaning up temporary file...'
+        Remove-Item -LiteralPath $tempFile -ErrorAction SilentlyContinue -Confirm:$false
     }
 
-    Write-Host "MAME updated successfully to $remoteVersion."
+    Write-Host -ForegroundColor Green "MAME updated successfully to $remoteVersion."
 }
