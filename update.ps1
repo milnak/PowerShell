@@ -113,13 +113,5 @@ function Invoke-ScoopUpdate {
 
     scoop update *
     scoop cleanup *
-
-    # Enable completion in current shell.
-    # scoop install extras/scoop-completion
-    $modulePath = "$env:USERPROFILE\scoop\modules\scoop-completion"
-    if (Test-Path -LiteralPath $modulePath -PathType Container) {
-        'Installing scoop-completion'
-        Import-Module $modulePath
-    }
 }
 

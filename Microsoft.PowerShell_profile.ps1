@@ -70,6 +70,14 @@ Get-ChildItem -LiteralPath $wingetPackagesPath -Recurse -Filter '*.exe' -ErrorAc
 
 # Invoke-ScoopUpdate
 
+# Enable completion in current shell.
+# scoop install extras/scoop-completion
+$modulePath = "$env:USERPROFILE\scoop\modules\scoop-completion"
+if (Test-Path -LiteralPath $modulePath -PathType Container) {
+    'Installing scoop-completion'
+    Import-Module $modulePath
+}
+
 # zoxide, needs to come AFTER setting prompt!
 if ((Get-Command -Name 'zoxide.exe' -CommandType Application -ErrorAction SilentlyContinue)) {
     'Adding zoxide completion'
