@@ -1,3 +1,64 @@
+function Get-MameRomInfo {
+    [CmdletBinding()]
+    param(
+        # Path to MAME EXE.
+        [string]$MameExe = './mame.exe'
+    )
+
+    if (-not (Get-Command -Name $MameExe -CommandType Application -ErrorAction SilentlyContinue)) {
+        Write-Warning "MAME executable not found: $MameExe"
+        return
+    }
+
+    # Load MAME -xml
+    [xml]$xml = & $MameExe -listxml
+
+    # Print mame version, e.g. "0.286 (mame0286)"
+    $version = $null
+    if ($xml.mame.build -match '(?<version>\d+\.\d+)\s+\(mame(?<versionint>\d+)\)') {
+        Write-Verbose "MAME version: $($matches['version']) ($($matches['versionint']))"
+        [version]$version = $matches['version']
+    }
+    else {
+        Write-Warning "Unable to parse MAME version from output: $($xml.mame.build)"
+        return
+    }
+
+    foreach ($g in $xml.mame.machine) {
+        $control = @($g.input.control)[0]
+        # REVIEW: Any better way to remove non-arcade devices?
+        if (`
+                $g.softwarelist -eq $null `
+                -and $g.runnable -eq 'yes' `
+                -and $g.driver.status -eq 'good' `
+                -and $g.cloneof -eq $null `
+                -and $g.romof -eq $null `
+                -and $g.isbios -ne 'yes' `
+                -and $g.isdevice -ne 'yes' `
+                -and $g.ismechanical -ne 'yes' `
+                -and $g.input.players -ne 0 `
+                -and $g.display -ne $null `
+                -and $control -ne $null `
+                -and $control.type -notin @('keyboard', 'keypad', 'gambling')
+        ) {
+            [PSCustomObject]@{
+                Rom          = $g.name
+                # CloneOf      = $g.cloneof
+                # RomOf        = $g.romof
+                Description  = $g.description
+                Manufacturer = $g.manufacturer
+                Buttons      = $control.buttons
+                Control      = $control.type
+                Players      = $g.input.players
+                Rotation     = $g.display.rotate
+                # Orientation  = $g.video.orientation
+                Resolution   = '{0}x{1}' -f $g.display.width, $g.display.height
+                Year         = $g.year
+            }
+        }
+    }
+}
+
 <#
 .SYNOPSIS
 List installed MAME ROMs, suitable for filtering.

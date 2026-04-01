@@ -34,15 +34,16 @@ function Invoke-Code {
         Write-Verbose '[Invoke-Code] process'
 
         $resolvedPath = Resolve-Path -Path $File -ErrorAction SilentlyContinue
-        if (-not $resolvedPath -and $File -notmatch '[\*\?]' -and -not (Test-Path -LiteralPath $resolvedPath -PathType Leaf -ErrorAction SilentlyContinue)) {
-            # Add directory names or files that don't exist as-is
+        if (-not $resolvedPath -and $File -notmatch '[\*\?]' -or (Test-Path -LiteralPath $resolvedPath -PathType Container -ErrorAction SilentlyContinue)) {
+            # File spec doesn't exist, file spec doesn't contains wildcards, or file spec resolves to an existing folder.
+            # Pass the original file spec to code, which may create a new file or show an error.
             if ($PSCmdlet.ShouldProcess($File, 'Edit with code')) {
-                Write-Verbose "Adding non-existent file: $File"
+                Write-Verbose "Adding file spec as-is: $File"
                 $codeArgs += $File
             }
         }
         else {
-            # Support wildcards
+            # File spec resolves to a file or a wildcard. Add them individually.
             Write-Verbose "Resolving path: $File"
             Get-ChildItem -Path $File | Select-Object -ExpandProperty FullName | ForEach-Object {
                 if ($PSCmdlet.ShouldProcess($_, 'Edit with code')) {
