@@ -47,7 +47,7 @@ function Invoke-Normalize {
         Write-Verbose "Name: $itemname; Extension: $itemextension"
 
         if (-not $PSCmdlet.ShouldProcess($resolveditem, 'Normalize')) {
-            continue
+            return
         }
 
         $ffmpeg_args = `
@@ -91,25 +91,25 @@ function Invoke-Normalize {
         if ($proc.ExitCode -ne 0) {
             Write-Warning "ffmpeg failed with code $($proc.ExitCode)"
             $out
-            continue
+            return
         }
 
         # Write-verbose $out
         # e.g. "[Parsed_volumedetect_0 @ 0000021cc88cbc00] max_volume: 0.0 dB"
         if ($out -notmatch 'max_volume: (?<max_volume>-?[\d\.]+) dB') {
-            Write-Warning "Unable to determine max_volume of $resolveditem"
-            continue
+            Write-Warning "Unable to determine max_volume of $itemname"
+            return
         }
 
         # Gain is inverse of reported max_volume
         $gain = - [decimal]$matches['max_volume']
         if ($gain -le 1.0) {
-            Write-Output "No gain adjustment required for $resolveditem"
-            continue
+            Write-Output "No gain adjustment required for $itemname"
+            return
         }
 
-        $tempfile = Join-Path -Path (Split-Path -LiteralPath $resolveditem -Parent) -ChildPath "$itemname-normalized$($itemextension)"
-        Write-Output "Applying gain of $gain dB to $resolveditem"
+        $tempfile = Join-Path -Path (Split-Path -Path $resolveditem -Parent) -ChildPath "$itemname-normalized$($itemextension)"
+        Write-Output "Applying gain of $gain dB to $itemname"
 
         $ffmpeg_args = `
             # Overwrite output files.
@@ -145,7 +145,7 @@ function Invoke-Normalize {
             Write-Warning "ffmpeg failed with code $($proc.ExitCode)"
             $out
             Remove-Item $tempfile -ErrorAction SilentlyContinue
-            continue
+            return
         }
 
         if ($InPlace) {

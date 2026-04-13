@@ -168,6 +168,7 @@ function Invoke-FixXsc {
             $xsc.Data['Main']['WindowSize'] = '1706|979|858|410,0'
             $xsc.Data['Main']['ViewList'] = '1,0,0'
 
+            $xsc.Data['View0']['ShowNavbar'] = '0'
             $xsc.Data['View0']['ShowSpectrum'] = '0'
             $xsc.Data['View0']['ShowGuessNotes'] = '0'
             $xsc.Data['View0']['ShowGuessChords'] = '0'
