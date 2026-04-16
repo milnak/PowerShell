@@ -282,3 +282,77 @@ function Get-DiskUsage {
     } `
     | Format-Table
 }
+
+
+function Get-ChildItemTree {
+    param(
+        [string]$Path = (Get-Location).Path,
+        # Display the names of the files in each folder.
+        [switch]$ShowFiles,
+        # Use ASCII instead of extended characters.
+        [switch]$UseAscii
+    )
+
+    if ($UseAscii) {
+        $pipe = '|'
+        $tee = '+'
+        $elbow = '\'
+        $dash = '-'
+    }
+    else {
+    $pipe = [char]0x2502    # │
+    $tee = [char]0x251C     # ├
+    $elbow = [char]0x2514   # └
+    $dash = [char]0x2500    # ─
+    }
+
+    function Show-TreeDir {
+        param(
+            [string]$Dir,
+            [string]$Prefix = ""
+        )
+
+        $subdirs = @(Get-ChildItem -Path $Dir -Directory  -Force | Sort-Object Name)
+        $hasDirs = $subdirs.Count -gt 0
+
+        if ($ShowFiles) {
+            $files = @(Get-ChildItem -Path $Dir -File -Force | Sort-Object Name)
+
+            # Files listed first; use │ continuation when subdirs follow
+            $fileIndent = if ($hasDirs) { "$pipe   " } else { "    " }
+            foreach ($f in $files) {
+                Write-Output "$Prefix$fileIndent$($f.Name)"
+            }
+
+            # Blank separator between files and directories
+            if ($files.Count -gt 0 -and $hasDirs) {
+                Write-Output "$Prefix$pipe"
+            }
+        }
+
+        # Subdirectories
+        for ($i = 0; $i -lt $subdirs.Count; $i++) {
+            $isLast = ($i -eq $subdirs.Count - 1)
+            $connector = if ($isLast) { "$elbow$([string]$dash * 3)" } else { "$tee$([string]$dash * 3)" }
+            $childPrefix = if ($isLast) { "$Prefix    " } else { "$Prefix$pipe   " }
+
+            Write-Output "$Prefix$connector$($subdirs[$i].Name)"
+            Show-TreeDir -Dir $subdirs[$i].FullName -Prefix $childPrefix
+        }
+    }
+
+    # Print root label (drive + relative path like Windows tree)
+    $root = (Resolve-Path $Path -ErrorAction Stop).Path
+    $cwd = (Get-Location -ErrorAction Stop).Path
+    $drive = Split-Path $cwd -Qualifier
+    if ($root -eq $cwd) {
+        Write-Output "${drive}."
+    }
+    else {
+        Write-Output "$drive$((Split-Path $root -NoQualifier).TrimStart('\'))"
+    }
+
+    Show-TreeDir -Dir $root
+}
+
+Set-Alias -Name tree -Value Get-ChildItemTree
