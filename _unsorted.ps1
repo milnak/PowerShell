@@ -547,3 +547,60 @@ function New-GuidFormat {
         }
     }
 }
+
+# Copy to clipboard e.g.
+#
+#          A
+# Blame it all on my roots
+#   Bbdim
+# I showed up in boots
+#     Bm
+# And ruined your black tie affair
+#     E
+# The last one to know, the last one to show
+#           A
+# I was the last one you thought you'd see there
+#
+# Output:
+#
+# Well, I was [G] raised up beneath the [D] shade of a [C] Georgia pine
+# And that`s [D] home you know
+# [G] Sweet tea, pecan [D] pie and homemade [C] wine
+# Where the [D] peaches grow
+# And [G] my house, it`s not [D] much to talk a[C] bo[-] ut[D]
+# But it`s [G] filled with love that`s [D] grown in southern [Gsus] ground
+function Convert-UltimateGuitarToChopro {
+    [CmdletBinding()]
+    param()
+
+    $content = (Get-Clipboard) -split "`r`n"
+    if ($content.Count % 2 -ne 0) {
+        Write-Host -ForegroundColor Red "The clipboard content does not have an even number of lines."
+        return 1
+    }
+
+    for ($i = 0; $i -lt $content.Count; $i += 2) {
+        $chordLine = $content[$i]
+        $chordIndex = @{}
+        $chords = ($chordLine | Select-String -Pattern '\S+' -AllMatches).Matches
+        if ($chords.Count -ne 0) {
+            $chords | ForEach-Object { $chordIndex[$_.Index] = $_.Value }
+        }
+        $lyricLine = $content[$i + 1]
+        Write-Verbose "$chordLine`n$lyricLine"
+
+        $result = $lyricLine
+        foreach ($entry in ($chordIndex.GetEnumerator() | Sort-Object { [int]$_.Name } -Descending)) {
+            Write-Verbose "Inserting chord $($entry.Value) at position $($entry.Name)"
+            $pos = [int]$entry.Name
+            $chord = "[$($entry.Value)] "
+            if ($pos -ge $result.Length) {
+                $result = $result.PadRight($pos) + $chord
+            }
+            else {
+                $result = $result.Insert($pos, $chord)
+            }
+        }
+        $result
+    }
+}

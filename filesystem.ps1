@@ -192,6 +192,9 @@ function Invoke-DU {
 }
 
 
+Set-SelfOwnership
+Jeff Miller<Jeff.Miller@microsoft.com>
+​You​
 <#
 .SYNOPSIS
     Take ownership of a file or folder.
@@ -210,9 +213,9 @@ function Set-SelfOwnership {
     # Support -Confirm, -WhatIf
     [CmdletBinding(SupportsShouldProcess)]
     param(
-        [Parameter(Mandatory, Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
-        [Alias('FullName')]
-        [string[]]$Path
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName', 'Path')]
+        [string]$File
     )
 
     begin {
@@ -227,30 +230,31 @@ function Set-SelfOwnership {
         'takeown', 'icacls' | ForEach-Object {
             Get-Command -Name "$_.exe" -CommandType Application -ErrorAction Stop | Out-Null
         }
+
+        $currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     }
 
     process {
-        foreach ($item in $Path) {
-            Write-Verbose "Taking ownership of $item"
-            $ResolvedPath = Resolve-Path -LiteralPath $item -ErrorAction Stop
-            if ($PSCmdlet.ShouldProcess($ResolvedPath, 'Take Ownership')) {
-                if (Test-Path -LiteralPath $ResolvedPath -PathType Container) {
-                    takeown.exe /f $ResolvedPath /r /d y
-                    if ($LASTEXITCODE -ne 0) {
-                        throw "takeown.exe $ResolvedPath failed: $LASTEXITCODE"
-                    }
-                }
-                else {
-                    takeown.exe /f $ResolvedPath
-                    if ($LASTEXITCODE -ne 0) {
-                        throw "takeown $ResolvedPath failed: $LASTEXITCODE"
-                    }
-                }
-
-                icacls.exe $ResolvedPath /grant administrators:F /t
+        Write-Verbose "Taking ownership of $File"
+        $ResolvedPath = Resolve-Path -LiteralPath $File -ErrorAction Stop
+        if ($PSCmdlet.ShouldProcess($ResolvedPath, 'Take Ownership')) {
+            if (Test-Path -LiteralPath $ResolvedPath -PathType Container) {
+                takeown.exe /f $ResolvedPath /r /d y
                 if ($LASTEXITCODE -ne 0) {
-                    throw "icacls $ResolvedPath failed: $LASTEXITCODE"
+                    throw "Failed: $LASTEXITCODE"
                 }
+            }
+            else {
+                takeown.exe /f $ResolvedPath
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed: $LASTEXITCODE"
+                }
+            }
+
+            Write-Verbose "Granting full control to current user SID $currentUserSid"
+            icacls.exe $ResolvedPath /grant "*${currentUserSid}:(F)" /t
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed: $LASTEXITCODE"
             }
         }
     }
