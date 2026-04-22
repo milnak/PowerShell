@@ -7,6 +7,8 @@ Unlike code.cmd, this supports wildcards.
  Get-ChildItem *.txt | Invoke-Code -Confirm
  #>
 function Invoke-Code {
+    # TODO: Support multiple files on commandline, e.g. "Invoke-Code file1.txt file2.txt"
+
     # Support -Confirm, -WhatIf
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -33,23 +35,30 @@ function Invoke-Code {
     process {
         Write-Verbose '[Invoke-Code] process'
 
-        $resolvedPath = Resolve-Path -Path $File -ErrorAction SilentlyContinue
-        if (-not $resolvedPath -and $File -notmatch '[\*\?]' -or (Test-Path -LiteralPath $resolvedPath -PathType Container -ErrorAction SilentlyContinue)) {
-            # File spec doesn't exist, file spec doesn't contains wildcards, or file spec resolves to an existing folder.
-            # Pass the original file spec to code, which may create a new file or show an error.
-            if ($PSCmdlet.ShouldProcess($File, 'Edit with code')) {
-                Write-Verbose "Adding file spec as-is: $File"
-                $codeArgs += $File
-            }
-        }
-        else {
-            # File spec resolves to a file or a wildcard. Add them individually.
-            Write-Verbose "Resolving path: $File"
+
+        # Cases:
+        # 1. Wildcard provided: resolve and add all matches.
+        # 2. No wildcard, but file doesn't exist: add as-is (let code handle the error).
+        # 3. No wildcard, file exists: resolve and add. This allows for relative paths, e.g. "subdir\file.txt", to be added correctly.
+
+        if ($File -match '[\*\?]')
+        {
+            Write-Verbose "Resolving wildcard: $File"
             Get-ChildItem -Path $File | Select-Object -ExpandProperty FullName | ForEach-Object {
                 if ($PSCmdlet.ShouldProcess($_, 'Edit with code')) {
                     Write-Verbose "Adding file: $_"
                     $codeArgs += $_
                 }
+            }
+        }
+        else {
+            $resolvedPath = Resolve-Path -LiteralPath $File -ErrorAction SilentlyContinue
+            if (-not $resolvedPath) {
+                Write-Warning "Adding non-existent file: $File"
+                $codeArgs += $File
+            }
+            else {
+                $codeArgs += $resolvedPath
             }
         }
     }
