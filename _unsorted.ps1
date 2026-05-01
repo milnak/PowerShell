@@ -10,172 +10,64 @@
     Display every possible color value, not just the reduced palette.
 #>
 function Show-ColorTable {
-    Param([switch]$ShowAll)
-    if (-not $ShowAll) {
-        # Inspired by https://windowsterminalthemes.dev
-        $fgColors = @('Black', 'DarkGray', 'DarkRed', 'Red', 'DarkGreen', 'Green', `
-                'DarkYellow', 'Yellow', 'DarkBlue', 'Blue', 'DarkMagenta', 'Magenta', `
-                'DarkCyan', 'Cyan', 'Gray', 'White')
-        $bgColors = @('Black', 'DarkGray', 'DarkRed', 'DarkGreen', 'DarkYellow', `
-                'DarkBlue', 'DarkMagenta', 'DarkCyan', 'Gray', 'Black' )
-        foreach ($fgcolor in $fgColors) {
-            foreach ($bgcolor in $bgColors) {
-                Write-Host -NoNewLine -ForegroundColor $fgcolor -BackgroundColor $bgcolor 'gYw'
-                Write-Host -NoNewline ' '
-            }
-            Write-Host ''
-        }
-    }
-    else {
-        $colors = [enum]::GetValues([ConsoleColor])
-        foreach ($bgcolor in $colors) {
-            foreach ($fgcolor in $colors) {
-                $fg, $bg = ($fgcolor -replace 'Dark', 'Dk'), ($bgcolor -replace 'Dark', 'Dk')
-                Write-Host -ForegroundColor $fgcolor -BackgroundColor $bgcolor -NoNewLine "|$fg"
-            }
-            Write-Host " on $bg"
-        }
-    }
-}
+    [CmdletBinding(DefaultParameterSetName = 'ShowAll')]
 
-<#
-.SYNOPSIS
-    Launch notepad4.
-.DESCRIPTION
-    Starts the notepad4 executable, forwarding any provided arguments.
-#>
-function Invoke-notepad {
-    Start-Process -NoNewWindow -FilePath 'notepad4.exe' -ArgumentList $args
-}
-
-
-<#
-.SYNOPSIS
-    Retrieve the install path of a program via its uninstall GUID.
-.DESCRIPTION
-    Looks in HKCU and then HKLM uninstall registry keys for the given
-    ProductId and returns the InstallLocation value.
-.PARAMETER ProductId
-    GUID or product identifier found in the uninstall registry key.
-#>
-function Get-UninstallPath {
-    param(
-        [Parameter(Mandatory = $true)] [string]$ProductId
+    Param(
+        [Parameter(Mandatory = $true, ParameterSetName = 'All')]
+        [switch]$All,
+        [Parameter(Mandatory = $true, ParameterSetName = 'gYw')]
+        [switch]$gYw,
+        [Parameter(Mandatory = $true, ParameterSetName = 'Terminal')]
+        [switch]$Terminal
     )
 
-    $regPath = "/SOFTWARE/Microsoft/Windows/CurrentVersion/Uninstall/$ProductId"
+    switch ($PSCmdlet.ParameterSetName) {
+        'Terminal' {
+            Write-Host -ForegroundColor White 'Foreground'
 
-    # Check user location first
-    $path = Get-ItemProperty -Path "HKCU:$regPath" -Name 'InstallLocation' -ErrorAction SilentlyContinue
-    if (-not $path) {
-        # Check system location next
-        $path = Get-ItemProperty -Path "HKLM:$regPath" -Name 'InstallLocation' -ErrorAction SilentlyContinue
-    }
-
-    $path.InstallLocation
-}
-
-
-<#
-.SYNOPSIS
-    Terminate a process gracefully or forcefully.
-.DESCRIPTION
-    Attempts to close the main window of the named process. If -Force is
-    specified and the process remains, Stop-Process is invoked to kill it.
-.PARAMETER Name
-    Name of the process to terminate.
-.PARAMETER Force
-    Forcefully stop the process if it does not exit gracefully.
-#>
-function Invoke-Kill {
-    param(
-        [Parameter(Mandatory = $true)] [string]$Name,
-        [switch]$Force
-    )
-
-    $process = Get-Process -Name $Name -ErrorAction SilentlyContinue
-    if ($process.Count -eq 0) {
-        'Process not found'
-    }
-    elseif ($process.Count -eq 1) {
-        $description = $process.Description
-        $processId = $process.Id
-        $mainWindowTitle = $process.MainWindowTitle
-        # try gracefully first
-        $process.CloseMainWindow() | Out-Null
-        if ($Force -and -not $process.HasExited) {
-            Stop-Process -Force -Name $Name
+            Write-Host -ForegroundColor Black -NoNewLine "Black`t"
+            Write-Host -ForegroundColor DarkGray 'Bright Black'
+            Write-Host -ForegroundColor DarkRed -NoNewLine "Red`t"
+            Write-Host -ForegroundColor Red 'Bright red'
+            Write-Host -ForegroundColor DarkGreen -NoNewLine "Green`t"
+            Write-Host -ForegroundColor Green 'Bright green'
+            Write-Host -ForegroundColor DarkYellow -NoNewLine "Yellow`t"
+            Write-Host -ForegroundColor Yellow 'Bright yellow'
+            Write-Host -ForegroundColor DarkBlue -NoNewLine "Blue`t"
+            Write-Host -ForegroundColor Blue 'Bright blue'
+            Write-Host -ForegroundColor DarkMagenta -NoNewLine "Purple`t"
+            Write-Host -ForegroundColor Magenta 'Bright purple'
+            Write-Host -ForegroundColor DarkCyan -NoNewLine "Cyan`t"
+            Write-Host -ForegroundColor Cyan 'Bright cyan'
+            Write-Host -ForegroundColor Gray -NoNewLine "White`t"
+            Write-Host -ForegroundColor White 'Bright white'
         }
-        if ($process.HasExited) {
-            'process {0} ({1}) - ''{2}'' killed' -f $description, $processId, $mainWindowTitle
-        }
-    }
-    else {
-        'Multiple instances running: {0}' -f ($process.Id -join ' ')
-    }
-}
-
-<#
-.SYNOPSIS
-    Temporary PATH environment variable helper.
-.DESCRIPTION
-    List, add, or remove entries from the current PATH environment variable.
-    Changes do not persist beyond the current session.
-.PARAMETER List
-    Display the current PATH entries.
-.PARAMETER Add
-    Add a new entry to PATH.
-.PARAMETER Top
-    When adding, place the new entry at the beginning.
-.PARAMETER Remove
-    Remove an entry from PATH.
-.PARAMETER Path
-    The path to add or remove.
-#>
-function Path {
-    param(
-        [Parameter(ParameterSetName = 'List')]
-        [switch]$List,
-        [Parameter(ParameterSetName = 'Add')]
-        [switch]$Add,
-        [Parameter(ParameterSetName = 'Add')]
-        [switch]$Top = $False,
-        [Parameter(ParameterSetName = 'Remove')]
-        [switch]$Remove,
-        [Parameter(ParameterSetName = 'Add', Mandatory = $True, Position = 0)]
-        [Parameter(ParameterSetName = 'Remove', Mandatory = $True, Position = 0)]
-        [string]$Path
-    )
-
-    if ($List) {
-        (Get-ChildItem env:PATH).Value -split ';'
-        return
-    }
-
-    if ($Add) {
-        $Path = $Path.TrimEnd('\')
-        $paths = (Get-ChildItem env:PATH).Value -split ';'
-        if ($paths -notcontains $Path -and $paths -notcontains "$Path\") {
-            if ($Top) {
-                $env:PATH = "$Path;$env:PATH"
-            }
-            else {
-                $env:PATH = "$env:PATH;$Path"
+        'gYw' {
+            # Inspired by https://windowsterminalthemes.dev
+            $fgColors = @('Black', 'DarkGray', 'DarkRed', 'Red', 'DarkGreen', 'Green', `
+                    'DarkYellow', 'Yellow', 'DarkBlue', 'Blue', 'DarkMagenta', 'Magenta', `
+                    'DarkCyan', 'Cyan', 'Gray', 'White')
+            $bgColors = @('Black', 'DarkGray', 'DarkRed', 'DarkGreen', 'DarkYellow', `
+                    'DarkBlue', 'DarkMagenta', 'DarkCyan', 'Gray', 'Black' )
+            foreach ($fgcolor in $fgColors) {
+                foreach ($bgcolor in $bgColors) {
+                    Write-Host -NoNewLine -ForegroundColor $fgcolor -BackgroundColor $bgcolor 'gYw'
+                    Write-Host -NoNewline ' '
+                }
+                Write-Host ''
             }
         }
-        return
-    }
 
-    if ($Remove) {
-        $Path = $Path.TrimEnd('\')
-        $newPath = @()
-        (Get-ChildItem env:PATH).Value -split ';' | ForEach-Object {
-            if ($_ -notlike $Path -and $_ -notlike "$Path\") {
-                $newPath += $_
+        'All' {
+            $colors = [enum]::GetValues([ConsoleColor])
+            foreach ($bgcolor in $colors) {
+                foreach ($fgcolor in $colors) {
+                    $fg, $bg = ($fgcolor -replace 'Dark', 'Dk'), ($bgcolor -replace 'Dark', 'Dk')
+                    Write-Host -ForegroundColor $fgcolor -BackgroundColor $bgcolor -NoNewLine "|$fg"
+                }
+                Write-Host " on $bg"
             }
         }
-        $env:PATH = $newPath -join ';'
-        return
     }
 }
 
@@ -231,7 +123,13 @@ function rsync {
     Parses each .sng XML file and outputs selected song metadata properties.
 #>
 function Get-JJazzLabMeta {
-    foreach ($file in (Get-ChildItem -File '*.sng')) { ([xml](Get-Content $file)).Song | Select-Object @{Name = 'BaseName'; Expression = { $file.BaseName } }, spName, spTempo, spComments }
+    foreach ($file in (Get-ChildItem -File '*.sng')) {
+        ([xml](Get-Content $file)).Song `
+        | Select-Object @{
+            Name       = 'BaseName'
+            Expression = { $file.BaseName }
+        }, spName, spTempo, spComments
+    }
 }
 
 <#
@@ -404,61 +302,6 @@ function Convert-SafeLink {
 
 <#
 .SYNOPSIS
-    Retrieve detailed system and Windows product key information.
-.DESCRIPTION
-    Gathers Windows version, build, architecture, registered owner, and
-    decrypts the product key from the registry. Adapted from WinProdKeyFinder.
-#>
-function Get-SystemInfo {
-    # Derived from WinProdKeyFinder: https://github.com/mrpeardotnet/WinProdKeyFinder (DecodeProductKeyWin8AndUp)
-    $digitalProductId = (Get-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion').DigitalProductId
-
-    # First byte appears to be length
-    if ($digitalProductId[0] -ne $digitalProductId.Length) {
-        throw 'Invalid length.'
-    }
-
-    $productId = [Text.Encoding]::UTF8.GetString($digitalProductId[8..30])
-    $sku = [Text.Encoding]::UTF8.GetString($digitalProductId[36..48])
-
-    $keyOffset = 52
-    # decrypt base24 encoded binary data from $digitalProductId[52..66] $key
-    $key = $null
-    $digits = 'BCDFGHJKMPQRTVWXY2346789'
-    For ($i = 24; $i -ge 0; $i--) {
-        $index = 0
-        For ($j = 14; $j -ge 0; $j--) {
-            $index = $index * 256
-            $index += $digitalProductId[$keyOffset + $j]
-            $digitalProductId[$keyOffset + $j] = [math]::truncate($index / 24)
-            $index = $index % 24
-        }
-        $key = $digits[$index] + $key
-    }
-
-    # Replace first character with 'N', split every 5 chars with '-'
-    $key = ('N' + $key.Substring(1, $key.Length - 1)) -split '(.{5})' -ne '' -join '-'
-
-    $currentVersion = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
-    $win32os = Get-WmiObject Win32_OperatingSystem
-
-    [PSCustomObject]@{
-        Edition         = $win32os.Caption
-        Version         = $currentVersion.DisplayVersion
-        OSBuild         = '{0}.{1}' -f $currentVersion.CurrentBuild, $currentVersion.UBR
-        OSArch          = $win32os.OSArchitecture
-
-        RegisteredOwner = $currentVersion.RegisteredOwner
-
-        ProductID       = $productId
-        Sku             = $sku
-
-        ProductKey      = $key
-    }
-}
-
-<#
-.SYNOPSIS
     Push the profile directory onto the location stack.
 #>
 function Push-ProfileLocation {
@@ -548,59 +391,90 @@ function New-GuidFormat {
     }
 }
 
-# Copy to clipboard e.g.
-#
-#          A
-# Blame it all on my roots
-#   Bbdim
-# I showed up in boots
-#     Bm
-# And ruined your black tie affair
-#     E
-# The last one to know, the last one to show
-#           A
-# I was the last one you thought you'd see there
-#
-# Output:
-#
-# Well, I was [G] raised up beneath the [D] shade of a [C] Georgia pine
-# And that`s [D] home you know
-# [G] Sweet tea, pecan [D] pie and homemade [C] wine
-# Where the [D] peaches grow
-# And [G] my house, it`s not [D] much to talk a[C] bo[-] ut[D]
-# But it`s [G] filled with love that`s [D] grown in southern [Gsus] ground
+<#
+.SYNOPSIS
+    Convert Ultimate Guitar-style chord/lyric pairs into ChordPro format.
+.DESCRIPTION
+    Reads text lines from the pipeline in alternating pairs:
+    chord line, then lyric line. Non-whitespace chord tokens are inserted into
+    the lyric line at matching column positions using ChordPro tags, e.g. [G].
+.PARAMETER InputObject
+    Input text from the pipeline. Each incoming object is treated as one line.
+    Multi-line strings are split into individual lines.
+.EXAMPLE
+    Get-Clipboard | Convert-UltimateGuitarToChopro
+
+    Converts clipboard text piped in as lines.
+.EXAMPLE
+    song.txt
+    ========
+             A
+    Blame it all on my roots
+      Bbdim
+    I showed up in boots
+        Bm
+    And ruined your black tie affair
+        E
+    The last one to know, the last one to show
+              A
+    I was the last one you thought you'd see there
+
+    Get-Content .\song.txt | Convert-UltimateGuitarToChopro
+#>
 function Convert-UltimateGuitarToChopro {
     [CmdletBinding()]
-    param()
+    param(
+        [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName, Position = 0)]
+        [AllowEmptyString()]
+        [string]$InputObject
+    )
 
-    $content = (Get-Clipboard) -split "`r`n"
-    if ($content.Count % 2 -ne 0) {
-        Write-Host -ForegroundColor Red "The clipboard content does not have an even number of lines."
-        return 1
+    begin {
+        $content = New-Object System.Collections.Generic.List[string]
     }
 
-    for ($i = 0; $i -lt $content.Count; $i += 2) {
-        $chordLine = $content[$i]
-        $chordIndex = @{}
-        $chords = ($chordLine | Select-String -Pattern '\S+' -AllMatches).Matches
-        if ($chords.Count -ne 0) {
-            $chords | ForEach-Object { $chordIndex[$_.Index] = $_.Value }
+    process {
+        if ($null -eq $InputObject) {
+            return
         }
-        $lyricLine = $content[$i + 1]
-        Write-Verbose "$chordLine`n$lyricLine"
 
-        $result = $lyricLine
-        foreach ($entry in ($chordIndex.GetEnumerator() | Sort-Object { [int]$_.Name } -Descending)) {
-            Write-Verbose "Inserting chord $($entry.Value) at position $($entry.Name)"
-            $pos = [int]$entry.Name
-            $chord = "[$($entry.Value)] "
-            if ($pos -ge $result.Length) {
-                $result = $result.PadRight($pos) + $chord
-            }
-            else {
-                $result = $result.Insert($pos, $chord)
-            }
+        if ($InputObject -match "`r|`n") {
+            [Regex]::Split($InputObject, "`r?`n") | ForEach-Object { $content.Add($_) }
         }
-        $result
+        else {
+            $content.Add($InputObject)
+        }
+    }
+
+    end {
+        if ($content.Count % 2 -ne 0) {
+            Write-Host -ForegroundColor Red "The input does not have an even number of lines."
+            return 1
+        }
+
+        for ($i = 0; $i -lt $content.Count; $i += 2) {
+            $chordLine = $content[$i]
+            $chordIndex = @{}
+            $chords = ($chordLine | Select-String -Pattern '\S+' -AllMatches).Matches
+            if ($chords.Count -ne 0) {
+                $chords | ForEach-Object { $chordIndex[$_.Index] = $_.Value }
+            }
+            $lyricLine = $content[$i + 1]
+            Write-Verbose "$chordLine`n$lyricLine"
+
+            $result = $lyricLine
+            foreach ($entry in ($chordIndex.GetEnumerator() | Sort-Object { [int]$_.Name } -Descending)) {
+                Write-Verbose "Inserting chord $($entry.Value) at position $($entry.Name)"
+                $pos = [int]$entry.Name
+                $chord = "[$($entry.Value)] "
+                if ($pos -ge $result.Length) {
+                    $result = $result.PadRight($pos) + $chord
+                }
+                else {
+                    $result = $result.Insert($pos, $chord)
+                }
+            }
+            $result
+        }
     }
 }

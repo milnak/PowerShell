@@ -192,9 +192,6 @@ function Invoke-DU {
 }
 
 
-Set-SelfOwnership
-Jeff Miller<Jeff.Miller@microsoft.com>
-​You​
 <#
 .SYNOPSIS
     Take ownership of a file or folder.
