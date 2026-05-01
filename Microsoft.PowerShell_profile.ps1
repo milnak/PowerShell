@@ -25,7 +25,7 @@ if ($host.Name -ne 'ConsoleHost') {
     'sibelius', `
     'transcribe', `
     'update', `
-    'vscode' `
+    'vscode', `
     'windows' `
 | ForEach-Object {
     Write-Host "Loading functions from `e[1m$($_).ps1`e[22m"
