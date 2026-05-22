@@ -139,13 +139,13 @@ Directory containing mame.exe. Defaults to the current directory.
 Invoke-MameUpdate
 
 .EXAMPLE
-Invoke-MameUpdate -Path 'D:\MAME'
+Invoke-MameUpdate -Path 'D:\MAME' -Confirm
 #>
 function Invoke-MameUpdate {
     [CmdletBinding(SupportsShouldProcess)]
-    param()
+    param([string]$Path = (Resolve-Path '.'))
 
-    $mameExe = './mame.exe'
+    $mameExe = (Join-Path $Path 'mame.exe')
 
     # Ensure 7z exists
     $null = Get-Command -Name '7z.exe' -CommandType Application -ErrorAction Stop
@@ -183,7 +183,7 @@ function Invoke-MameUpdate {
     Write-Verbose "Latest available version: $remoteVersion"
 
     if ($localVersion -eq $remoteVersion) {
-        Write-Host -ForegroundColor Green 'MAME is already up to date.'
+        Write-Host -ForegroundColor Green "MAME ($localVersion) is already up to date."
         return
     }
 
