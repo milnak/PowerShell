@@ -141,7 +141,7 @@ Invoke-MameUpdate
 .EXAMPLE
 Invoke-MameUpdate -Path 'D:\MAME'
 #>
-function Update-MAME {
+function Invoke-MameUpdate {
     [CmdletBinding(SupportsShouldProcess)]
     param()
 
@@ -223,6 +223,7 @@ function Update-MAME {
 
     Write-Host -ForegroundColor Green "MAME updated successfully to $remoteVersion."
 }
+
 <#
 .SYNOPSIS
 Returns a filtered list of runnable base MAME machines from mame.exe -listxml output.
