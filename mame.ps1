@@ -284,3 +284,95 @@ function Update-MAME {
 
     Write-Host -ForegroundColor Green "MAME updated successfully to $remoteVersion."
 }
+<#
+.SYNOPSIS
+Returns a filtered list of runnable base MAME machines from mame.exe -listxml output.
+
+.DESCRIPTION
+Runs mame.exe -listxml, filters to runnable non-clone/non-ROMOF machine entries,
+and emits objects containing core metadata (description, controls, players,
+orientation, resolution, year, and driver).
+
+.PARAMETER MameExe
+Path to MAME executable. Defaults to ./mame.exe.
+
+.EXAMPLE
+Get-MameRomList
+
+.EXAMPLE
+$m = Get-MameRomList
+Get-Clipboard `
+| Where-Object { $_.Trim() -ne "" } `
+| ForEach-Object {
+  $m `
+  | Where-Object Description -like "$_*" `
+  | ForEach-Object { '{0} ({1}, {2}) [{3}]' -f $_.Description, $_.Manufacturer, $_.Year, $_.Rom }
+}
+#>
+function Get-MameRomList {
+    [CmdletBinding()]
+    param([string]$MameExe = './mame.exe')
+
+    if (-not (Get-Command -Name $MameExe -CommandType Application -ErrorAction SilentlyContinue)) {
+        Write-Warning "MAME executable not found: $MameExe"
+        return
+    }
+
+    try {
+        $mamexml = [xml](& $MameExe -listxml)
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "mame.exe -listxml exited with code $LASTEXITCODE."
+            return
+        }
+    }
+    catch {
+        Write-Warning "Unable to parse $MameExe -listxml: $_"
+        return
+    }
+
+    if (-not $mamexml.mame.machine) {
+        Write-Warning "Unexpected XML format from $MameExe -listxml"
+        return
+    }
+
+    if ($mamexml.mame.mameconfig -ne 10) {
+        Write-Warning "Unexpected MAME config version from $MameExe -listxml: $($mamexml.mame.mameconfig)"
+    }
+
+    # Best attempt to filter out non-arcade machines
+    $machines = $mamexml.mame.machine | Where-Object {
+        $null -eq $_.cloneof -and
+        $_.isbios -ne 'yes' -and
+        $_.ismechanical -ne 'yes' -and
+        $null -eq $_.softwarelist -and
+        $_.runnable -ne 'no' -and
+        $_.isdevice -ne 'yes' -and
+        $null -ne $_.display -and
+        $_.display.type -ne 'svg' -and
+        $null -ne $_.input -and
+        $_.input.players -ne 0 -and
+        $null -ne $_.input.control -and
+        @($_.input.control)[0].type -notin @('keyboard', 'keypad', 'gambling')
+
+        # Removed to allow romof="neogeo": $null -eq $_.romof -and `
+        # Removed to allow Allow status="preliminary", "imperfect": $_.driver.status -in @('good') -and `
+    }
+
+    foreach ($g in $machines) {
+        [PSCustomObject]@{
+            Rom          = $g.name
+            Description  = $g.Description
+            Manufacturer = $g.Manufacturer
+            Control      = $g.input.control[0].type
+            Players      = $g.input.players
+            Year         = $g.year
+            # CloneOf      = $g.cloneof
+            # RomOf        = $g.romof
+            # Buttons      = $g.input.buttons
+            # Orientation  = $g.video.orientation
+            # Resolution   = '{0}x{1}' -f $g.video.width, $g.video.height
+            # Driver       = $g.driver
+        }
+    }
+}
+}
