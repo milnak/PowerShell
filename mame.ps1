@@ -239,7 +239,8 @@ Path to MAME executable. Defaults to ./mame.exe.
 Get-MameRomList
 
 .EXAMPLE
-$m = Get-MameRomList
+$m = Get-MameRomList -MameExe 'G:\MAME\mame.exe'
+
 Get-Clipboard `
 | Where-Object { $_.Trim() -ne "" } `
 | ForEach-Object {
@@ -247,6 +248,10 @@ Get-Clipboard `
   | Where-Object Description -like "$_*" `
   | ForEach-Object { '{0} ({1}, {2}) [{3}]' -f $_.Description, $_.Manufacturer, $_.Year, $_.Rom }
 }
+
+.EXAMPLE
+Get-MameRomList | Group-Object Control | Sort-Object -Descending Count
+
 #>
 function Get-MameRomList {
     [CmdletBinding()]
@@ -276,10 +281,12 @@ function Get-MameRomList {
 
     if ($mamexml.mame.mameconfig -ne 10) {
         Write-Warning "Unexpected MAME config version from $MameExe -listxml: $($mamexml.mame.mameconfig)"
+        # Continue, as it might still work.
     }
 
     # Best attempt to filter out non-arcade machines
-    $machines = $mamexml.mame.machine | Where-Object {
+    $machines = $mamexml.mame.machine `
+    | Where-Object {
         $null -eq $_.cloneof -and
         $_.isbios -ne 'yes' -and
         $_.ismechanical -ne 'yes' -and
@@ -302,15 +309,12 @@ function Get-MameRomList {
             Rom          = $g.name
             Description  = $g.Description
             Manufacturer = $g.Manufacturer
-            Control      = $g.input.control[0].type
-            Players      = $g.input.players
             Year         = $g.year
-            # CloneOf      = $g.cloneof
-            # RomOf        = $g.romof
-            # Buttons      = $g.input.buttons
-            # Orientation  = $g.video.orientation
-            # Resolution   = '{0}x{1}' -f $g.video.width, $g.video.height
-            # Driver       = $g.driver
+            Players      = $g.input.players
+            Control      = @($g.input.control)[0].type
+            Buttons      = @($g.input.control)[0].buttons
+            Resolution   = '{0}x{1}' -f $g.display.width, $g.display.height
+            Rotate       = $g.display.rotate
         }
     }
 }
