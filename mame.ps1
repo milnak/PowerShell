@@ -245,9 +245,13 @@ $m = Get-MameRomList -MameExe 'G:\MAME\mame.exe'
 Get-Clipboard `
 | Where-Object { $_.Trim() -ne "" } `
 | ForEach-Object {
-  $m `
-  | Where-Object Description -like "$_*" `
-  | ForEach-Object { '{0} ({1}, {2}) [{3}]' -f $_.Description, $_.Manufacturer, $_.Year, $_.Rom }
+  $query = [regex]::Escape($_)
+  $machines = $m
+  | Where-Object Description -imatch "^$query(?: \([^)]*\))?$"
+  | ForEach-Object { '"{0}" ({1}, {2}) [{3}]' -f $_.Description, $_.Manufacturer, $_.Year, $_.Rom }
+  if ($machines.Count -eq 0) { Write-Host -ForegroundColor Red "No match for '$_'"; }
+  elseif ($machines.Count -gt 1) { Write-Host -ForegroundColor Yellow "Multiple matches for '$_'"; $machines | ForEach-Object { " $_" } }
+  else { $machines }
 }
 
 .EXAMPLE
@@ -295,7 +299,7 @@ function Get-MameRomList {
         $_.runnable -ne 'no' -and
         $_.isdevice -ne 'yes' -and
         $null -ne $_.display -and
-        $_.display.type -ne 'svg' -and
+        $_.display.type -notin @('lcd', 'svg') -and
         $null -ne $_.input -and
         $_.input.players -ne 0 -and
         $null -ne $_.input.control -and
