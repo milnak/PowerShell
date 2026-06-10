@@ -1,4 +1,56 @@
-# TODO: Add clixml cache to all -listxml and $DatFile
+# TODO: Use Get-MameListXmlLookup in Get-MameRomList and Get-MameRoms
+
+function Get-MameListXmlLookup {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$MamePath
+    )
+
+    try {
+        $resolvedMamePath = (Resolve-Path $MamePath -ErrorAction Stop).Path
+    }
+    catch {
+        Write-Warning "Mame EXE not found at $MamePath"
+        exit 1
+    }
+    Write-Verbose "MAME path: $resolvedMamePath"
+
+    if (-not (Test-Path -LiteralPath $resolvedMamePath -PathType Leaf)) {
+        Write-Warning "Mame path is not a file: $resolvedMamePath"
+        exit 1
+    }
+
+    # Parse output of "mame.exe -listxml", with caching keyed by MAME version string.
+    $mameVersion = & $resolvedMamePath -version
+    if ($mameVersion -match '\((\w+)\)') {
+        # e.g. "mame0287"
+        $cacheKey = $matches[1]
+    }
+    else {
+        Write-Warning "Could not determine MAME version from '$resolvedMamePath'. Verify it is a valid MAME executable."
+        exit 1
+    }
+
+    Write-Verbose "MAME version: $mameVersion"
+    $cacheFile = Join-Path $env:TEMP "mame_listxml_$cacheKey.clixml"
+
+    if (Test-Path $cacheFile) {
+        Write-Verbose "Loading ROM list from cache: $cacheFile"
+        $list = Import-Clixml $cacheFile
+        return $list
+    }
+
+    Write-Verbose "Cache not found. Running '$resolvedMamePath -listxml' ..."
+
+    # Output format:
+    #
+    # <?xml version="1.0"?>
+    # <!DOCTYPE mame [
+    # <!ELEMENT mame (machine+)>
+    $list = [xml](& $resolvedMamePath -listxml)
+    $list | Export-Clixml $cacheFile
+    return $list
+}
 
 <#
 .SYNOPSIS
@@ -379,6 +431,67 @@ function Convert-MameIniToText {
         }
     }
 
+    function Get-MameListFullLookup {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)][string]$MamePath
+        )
+
+        try {
+            $resolvedMamePath = (Resolve-Path $MamePath -ErrorAction Stop).Path
+        }
+        catch {
+            Write-Warning "Mame EXE not found at $MamePath"
+            exit 1
+        }
+        Write-Verbose "MAME path: $resolvedMamePath"
+
+        if (-not (Test-Path -LiteralPath $resolvedMamePath -PathType Leaf)) {
+            Write-Warning "Mame path is not a file: $resolvedMamePath"
+            exit 1
+        }
+
+        # Parse output of "mame.exe -listfull", with caching keyed by MAME version string.
+        $mameVersion = & $resolvedMamePath -version
+        if ($mameVersion -match '\((\w+)\)') {
+            $cacheKey = $matches[1]
+        }
+        else {
+            Write-Warning "Could not determine MAME version from '$resolvedMamePath'. Verify it is a valid MAME executable."
+            exit 1
+        }
+
+        Write-Verbose "MAME version: $mameVersion"
+        $cacheFile = Join-Path $env:TEMP "mame_listfull_$cacheKey.clixml"
+
+        if (Test-Path $cacheFile) {
+            Write-Verbose "Loading ROM list from cache: $cacheFile"
+            $list = Import-Clixml $cacheFile
+            Write-Verbose "Loaded $($list.Count) ROMs from cache"
+            return $list
+        }
+
+        Write-Verbose "Cache not found. Running '$resolvedMamePath -listfull' ..."
+
+        # Output format:
+        #
+        # Name:             Description:
+        # 005               "005"
+        # 005a              "005 (earlier version?)"
+        # 100lions          "100 Lions (10219211, NSW/ACT)"
+        $list = @{}
+        # "-Skip 1" to skip "Name:             Description:" header.
+        & $resolvedMamePath -listfull | Select-Object -Skip 1 | ForEach-Object {
+            if ($_ -match '^(\S+)\s+"(.+)"') {
+                $list[$matches[1]] = $matches[2]
+            }
+        }
+
+        Write-Verbose "Parsed $($list.Count) ROMs. Saving cache to: $cacheFile"
+        $list | Export-Clixml $cacheFile
+        return $list
+    }
+
     try {
         $IniPath = (Resolve-Path $IniPath -ErrorAction Stop).Path
     }
@@ -388,52 +501,7 @@ function Convert-MameIniToText {
     }
     Write-Verbose "INI path: $IniPath"
 
-    try {
-        $MamePath = (Resolve-Path $MamePath -ErrorAction Stop).Path
-    }
-    catch {
-        Write-Warning "Mame EXE not found at $MamePath"
-        exit 1
-    }
-    Write-Verbose "MAME path: $MamePath"
-
-    if (!(Get-Item $MamePath).PSIsContainer -eq $false -or (Get-Item $MamePath) -isnot [System.IO.FileInfo]) {
-        Write-Warning "Mame path is not a file: $MamePath"
-        exit 1
-    }
-
-    #
-    # Parse output of "mame.exe -listfull", with caching keyed by MAME version string.
-    # "-Skip 1" to skip "Name:             Description:" header.
-    #
-
-    $mameVersion = & $MamePath -version 2>&1
-    if ($mameVersion -match '\((\w+)\)') {
-        $cacheKey = $matches[1]
-    }
-    else {
-        Write-Warning "Could not determine MAME version from '$MamePath'. Verify it is a valid MAME executable."
-        exit 1
-    }
-    Write-Verbose "MAME version: $mameVersion"
-    $cacheFile = Join-Path $env:TEMP "mame_listfull_$cacheKey.clixml"
-
-    if (Test-Path $cacheFile) {
-        Write-Verbose "Loading ROM list from cache: $cacheFile"
-        $list = Import-Clixml $cacheFile
-        Write-Verbose "Loaded $($list.Count) ROMs from cache"
-    }
-    else {
-        Write-Verbose "Cache not found. Running '$MamePath -listfull' ..."
-        $list = @{}
-        & $MamePath -listfull 2>&1 | Select-Object -Skip 1 | ForEach-Object {
-            if ($_ -match '^(\S+)\s+"(.+)"') {
-                $list[$matches[1]] = $matches[2]
-            }
-        }
-        Write-Verbose "Parsed $($list.Count) ROMs. Saving cache to: $cacheFile"
-        $list | Export-Clixml $cacheFile
-    }
+    $list = Get-MameListFullLookup -MamePath $MamePath -Verbose:$VerbosePreference
 
     #
     # Parse "folder.ini" file.
