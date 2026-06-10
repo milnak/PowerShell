@@ -1,3 +1,5 @@
+# TODO: Add clixml cache to all -listxml and $DatFile
+
 <#
 .SYNOPSIS
 List installed MAME ROMs, suitable for filtering.
@@ -242,16 +244,17 @@ Get-MameRomList
 .EXAMPLE
 $m = Get-MameRomList -MameExe 'G:\MAME\mame.exe'
 
-Get-Clipboard `
+Get-Content 'D:\temp\Top 250 Greatest Arcade Games of All Time.txt' `
 | Where-Object { $_.Trim() -ne "" } `
 | ForEach-Object {
-  $query = [regex]::Escape($_)
-  $machines = $m
-  | Where-Object Description -imatch "^$query(?: \([^)]*\))?$"
-  | ForEach-Object { '"{0}" ({1}, {2}) [{3}]' -f $_.Description, $_.Manufacturer, $_.Year, $_.Rom }
-  if ($machines.Count -eq 0) { Write-Host -ForegroundColor Red "No match for '$_'"; }
-  elseif ($machines.Count -gt 1) { Write-Host -ForegroundColor Yellow "Multiple matches for '$_'"; $machines | ForEach-Object { " $_" } }
-  else { $machines }
+  $query = $_ # [regex]::Escape($_)
+  $machines = $m | Where-Object Description -eq $query
+  if (-not $machines) { $machines = $m | Where-Object Description -imatch "^$query(?: \([^)]*\))?" }
+  if ($machines.Count -eq 0) { Write-Host -ForegroundColor Red "No match for '$query'" }
+  else {
+    if ($machines.Count -gt 1) { Write-Host -ForegroundColor Yellow "$($machines.Count) matches for '$query':" }
+    $machines | ForEach-Object { '{0} ({1}, {2}) [{3}]' -f $_.Description, $_.Manufacturer, $_.Year, $_.Rom }
+  }
 }
 
 .EXAMPLE
@@ -324,3 +327,125 @@ function Get-MameRomList {
     }
 }
 
+<#
+.SYNOPSIS
+    Reads a mame "folder.ini" format file and displays contained names and sections with descriptions.
+.NOTES
+    Description will be empty if the name is not supported by the specified mame.exe
+
+    "mame -listfull" output will be cached based on the MAME version, e.g. "mame_listfull_mame0287.clixml"
+
+.EXAMPLE
+    .\Convert-MameIniToText.ps1 -Verbose `
+      -IniPath 'G:\mame\folders\TOP MAME ARCADE GAMES.ini' `
+      -MamePath G:\mame\mame.exe `
+      | Where-Object Section -eq 'ROOT_FOLDER' `
+      | Select-Object -Property @{Name='Entry'; Expression={"$($_.Description) [$($_.Name)]"}} `
+      | Sort-Object Entry
+#>
+function Convert-MameIniToText {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)][string]$IniPath,
+        [Parameter(Mandatory)][string]$MamePath
+    )
+
+    function Get-IniContent {
+        [CmdletBinding()]
+        Param(
+            [Parameter(Mandatory)][string]$FilePath
+        )
+
+        $section = ''
+
+        switch -Regex -File $FilePath {
+            "^\[(.+)\]" {
+                $section = $matches[1]
+            }
+            # Ignore comments
+            "^(;.*)$" {
+            }
+            # Key. Note that typically an ini would be in format "(.+?)\s*=(.*)"
+            "^(\w+)" {
+                $name = $matches[1]
+                # Ignore "FOLDER_SETTINGS" section, as it's folder config, not ROM names.
+                if ($section -ne 'FOLDER_SETTINGS') {
+                    [PSCustomObject]@{
+                        Section = $section
+                        Name    = $name
+                    }
+                }
+            }
+        }
+    }
+
+    try {
+        $IniPath = (Resolve-Path $IniPath -ErrorAction Stop).Path
+    }
+    catch {
+        Write-Warning "Ini file not found at $IniPath"
+        exit 1
+    }
+    Write-Verbose "INI path: $IniPath"
+
+    try {
+        $MamePath = (Resolve-Path $MamePath -ErrorAction Stop).Path
+    }
+    catch {
+        Write-Warning "Mame EXE not found at $MamePath"
+        exit 1
+    }
+    Write-Verbose "MAME path: $MamePath"
+
+    if (!(Get-Item $MamePath).PSIsContainer -eq $false -or (Get-Item $MamePath) -isnot [System.IO.FileInfo]) {
+        Write-Warning "Mame path is not a file: $MamePath"
+        exit 1
+    }
+
+    #
+    # Parse output of "mame.exe -listfull", with caching keyed by MAME version string.
+    # "-Skip 1" to skip "Name:             Description:" header.
+    #
+
+    $mameVersion = & $MamePath -version 2>&1
+    if ($mameVersion -match '\((\w+)\)') {
+        $cacheKey = $matches[1]
+    }
+    else {
+        Write-Warning "Could not determine MAME version from '$MamePath'. Verify it is a valid MAME executable."
+        exit 1
+    }
+    Write-Verbose "MAME version: $mameVersion"
+    $cacheFile = Join-Path $env:TEMP "mame_listfull_$cacheKey.clixml"
+
+    if (Test-Path $cacheFile) {
+        Write-Verbose "Loading ROM list from cache: $cacheFile"
+        $list = Import-Clixml $cacheFile
+        Write-Verbose "Loaded $($list.Count) ROMs from cache"
+    }
+    else {
+        Write-Verbose "Cache not found. Running '$MamePath -listfull' ..."
+        $list = @{}
+        & $MamePath -listfull 2>&1 | Select-Object -Skip 1 | ForEach-Object {
+            if ($_ -match '^(\S+)\s+"(.+)"') {
+                $list[$matches[1]] = $matches[2]
+            }
+        }
+        Write-Verbose "Parsed $($list.Count) ROMs. Saving cache to: $cacheFile"
+        $list | Export-Clixml $cacheFile
+    }
+
+    #
+    # Parse "folder.ini" file.
+    #
+    Write-Verbose "Parsing INI file: $IniPath"
+
+    Get-IniContent -FilePath $IniPath -Verbose:$VerbosePreference `
+    | ForEach-Object {
+        [PSCustomObject]@{
+            Name        = $_.Name
+            Section     = $_.Section
+            Description = if ($list.ContainsKey($_.Name)) { $list[$_.Name] } else { '' }
+        }
+    }
+}

@@ -7,7 +7,7 @@
 .PARAMETER File
     Path to the PDF file to split.
 .EXAMPLE
-    Invoke-PdfSplitPages -File 'document.pdf'
+    Invoke-PdfSplitPages -InFile 'document.pdf'
 .EXAMPLE
     Get-ChildItem *.pdf | Invoke-PdfSplitPages
 #>
@@ -16,22 +16,18 @@ function Invoke-PdfSplitPages {
     param(
         [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [Alias('FullName')]
-        [string]$File
+        [string]$InFile
     )
 
     begin {
         Get-Command -Name 'qpdf.exe' -ErrorAction Stop | Out-Null
     }
+
     process {
-        $outputFilename = [IO.Path]::GetFileNameWithoutExtension($File)
-        $outputFilename += '-%d.pdf'
+        $OutFile = Split-Path -Leaf -Path $InFile
 
-        Write-Host ''
-        Write-Host "`"$File`" --> `"$outputFilename`""
-        Write-Host ''
-
-        if ($PSCmdlet.ShouldProcess($File, 'Split PDF pages')) {
-            & qpdf.exe --split-pages "1-z" $File $outputFilename
+        if ($PSCmdlet.ShouldProcess($InFile, 'Split PDF pages')) {
+            & qpdf.exe $InFile --split-pages $OutFile
             if ($LASTEXITCODE -ne 0) {
                 Write-Warning "qpdf failed with exit code $LASTEXITCODE"
             }
