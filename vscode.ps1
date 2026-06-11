@@ -35,14 +35,8 @@ function Invoke-Code {
     process {
         Write-Verbose '[Invoke-Code] process'
 
-
-        # Cases:
-        # 1. Wildcard provided: resolve and add all matches.
-        # 2. No wildcard, but file doesn't exist: add as-is (let code handle the error).
-        # 3. No wildcard, file exists: resolve and add. This allows for relative paths, e.g. "subdir\file.txt", to be added correctly.
-
-        if ($File -match '[\*\?]')
-        {
+        if ($File -match '[\*\?]') {
+            # 1. Wildcard provided: resolve and add all matches.
             Write-Verbose "Resolving wildcard: $File"
             Get-ChildItem -Path $File | Select-Object -ExpandProperty FullName | ForEach-Object {
                 if ($PSCmdlet.ShouldProcess($_, 'Edit with code')) {
@@ -52,13 +46,20 @@ function Invoke-Code {
             }
         }
         else {
+            # 2. No wildcard. Attempt to resolve path.
             $resolvedPath = Resolve-Path -LiteralPath $File -ErrorAction SilentlyContinue
-            if (-not $resolvedPath) {
-                Write-Warning "Adding non-existent file: $File"
-                $codeArgs += $File
+            if ($resolvedPath) {
+                # 2a. file exists: resolve and add. This allows for relative paths, e.g. "subdir\file.txt", to be added correctly.
+                if ($PSCmdlet.ShouldProcess($resolvedPath, 'Edit with code')) {
+                    $codeArgs += $resolvedPath
+                }
             }
             else {
-                $codeArgs += $resolvedPath
+                # 2b. file doesn't exist: add as-is (let code handle the error).
+                if ($PSCmdlet.ShouldProcess($File, 'Edit with code')) {
+                    Write-Warning "Adding non-existent file: $File"
+                    $codeArgs += $File
+                }
             }
         }
     }
@@ -72,7 +73,6 @@ function Invoke-Code {
         }
 
         if ($codeArgs.Count -eq 0) {
-            Write-Warning 'No matching files found.'
             return
         }
 

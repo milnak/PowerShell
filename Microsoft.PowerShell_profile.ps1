@@ -38,27 +38,6 @@ Write-BoxedMessage -Message "Profile loaded from $PSScriptRoot`nPowerShell $((Ge
 Set-PSReadlineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadlineKeyHandler -Key DownArrow -Function HistorySearchForward
 
-if ((Get-Command -Name 'fzf.exe' -CommandType Application -ErrorAction SilentlyContinue)) {
-    # PSFzf: https://github.com/kelleyma49/PSFzf
-    'PSFzf' | ForEach-Object {
-        if (-not (Get-Module -Name $_ -ListAvailable -ErrorAction SilentlyContinue)) {
-            "Installing $_"
-            Install-Module -Name $_ -Force
-        }
-    }
-
-    'Enabling Ctrl+T, Ctrl+R completion'
-    # Reverse Search Through PSReadline History (default chord: Ctrl+r)
-    Set-PsFzfOption -PSReadlineChordProvider 'Ctrl+t' -PSReadlineChordReverseHistory 'Ctrl+r'
-    # Set-Location Based on Selected Directory (default chord: Alt+c)
-    $commandOverride = [ScriptBlock] { param($Location) Write-Host $Location }
-    Set-PsFzfOption -AltCCommand $commandOverride
-    # Tab Expansion
-    # Set-PSReadLineKeyHandler -Key Tab -ScriptBlock { Invoke-FzfTabCompletion }
-}
-
-Invoke-WingetUpdate
-
 # Add Winget package paths to PATH
 $wingetPackagesPath = "$env:LocalAppData\Microsoft\Winget\Packages"
 "Adding Winget paths from $wingetPackagesPath"
@@ -70,20 +49,8 @@ Get-ChildItem -LiteralPath $wingetPackagesPath -Recurse -Filter '*.exe' -ErrorAc
     $env:Path += ";$($_.Name)"
 }
 
-# Invoke-ScoopUpdate
-
-# Enable completion in current shell.
-# scoop install extras/scoop-completion
-$modulePath = "$env:USERPROFILE\scoop\modules\scoop-completion"
-if (Test-Path -LiteralPath $modulePath -PathType Container) {
-    'Installing scoop-completion'
-    Import-Module $modulePath
-}
-
 # zoxide, needs to come AFTER setting prompt!
 if ((Get-Command -Name 'zoxide.exe' -CommandType Application -ErrorAction SilentlyContinue)) {
     'Adding zoxide completion'
     Invoke-Expression -Command $(zoxide.exe init powershell | Out-String)
 }
-
-

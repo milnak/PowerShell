@@ -1,76 +1,20 @@
 <#
 .SYNOPSIS
-Check and apply WinGet package updates.
-
-.DESCRIPTION
-Queries WinGet for available package updates and installs them. A timestamp
-file is used to avoid checking more than once every 7 days unless the
-`-Force` switch is provided. The function requires the Microsoft.WinGet.Client
-module and will warn if it's not installed.
-
-.PARAMETER Force
-If specified, bypasses the 7‑day throttle and skips the user prompt.
-
-.EXAMPLE
-Invoke-WingetUpdate
-
-.EXAMPLE
-Invoke-WingetUpdate -Force
+Check for and install winget package updates.
 #>
-function Invoke-WingetUpdate {
-    [CmdletBinding()]
-    Param([switch]$Force)
+function Invoke-WingetUpgrade {
+    Get-Command -Name 'sudo.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    Get-Command -Name 'winget.exe' -CommandType Application -ErrorAction Stop | Out-Null
 
-    if (-not (Get-Command -Name 'Get-WinGetPackageUpdate' -ErrorAction SilentlyContinue)) {
-        # Install-Module -Name Microsoft.WinGet.Client -RequiredVersion 0.2.1
-        Write-Warning 'WinGet module not installed. Skipping.'
-        return
-    }
+    $params = `
+        '--all', `
+        '--accept-package-agreements', `
+        '--accept-source-agreements', `
+        '--force', `
+        '--include-unknown', `
+        '--silent'
 
-    if (-not $Force) {
-        if (((Get-Date) - [DateTime](Get-Content "~/.winget-lastcheck" -ErrorAction SilentlyContinue)).TotalDays -lt 7) {
-            'Winget update check was run recently. Skipping.'
-            return
-        }
-
-        Set-Content "~/.winget-lastcheck" -ErrorAction SilentlyContinue (Get-Date -Format 'O')
-    }
-
-    'Checking for winget updates'
-    ''
-
-    $updates = Get-WinGetPackageUpdate | Where-Object { $_.Source -eq 'winget' }
-    if ($updates.Count -eq 0) {
-        return
-    }
-
-    'The following Winget packages have updates available:'
-    $updates | ForEach-Object {
-        "• {0} ({1} -> {2})" -f $_.ID, $_.Version, $_.Available
-    }
-    ''
-
-    if (-not $Force) {
-        for ($i = 0; $i -lt 3; $i++) {
-            Write-Host -NoNewline "WinGet updates are available. Waiting for $(3-$i) second$(@('','s')[$i -le 1]), press a key to skip ...`r"
-            if ($Host.UI.RawUI.KeyAvailable -and $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyUp,IncludeKeyDown').KeyDown) {
-                Write-Warning 'Updating cancelled.'
-                return
-            }
-            Start-Sleep -Seconds 1
-        }
-        ''
-    }
-
-    'Found updates. Updating now.'
-    ''
-
-    # $wingetArgs = 'update', '--all', '--source', 'winget', '--accept-package-agreements', '--accept-source-agreements', '--include-unknown'
-    # & sudo.exe winget.exe @wingetArgs
-    $updates | ForEach-Object {
-        "• Updating {0} ..." -f $_.ID
-        Update-WinGetPackage -ID $_.ID -Exact
-    }
+    sudo.exe --inline winget.exe upgrade @params
 }
 
 <#
