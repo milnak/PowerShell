@@ -309,3 +309,11 @@ function Format-GitConfig {
         }
     }
 }
+
+<#
+.SYNOPSIS
+View difference between the current branch and the parent branch in the difftool.
+#>
+function Invoke-GitBranchDiff {
+    git.exe difftool --dir-diff ((git reflog (git branch --show-current) | Select-Object -Last 1) -split ' ')[0]
+}

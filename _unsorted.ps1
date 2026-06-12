@@ -478,3 +478,46 @@ function Convert-UltimateGuitarToChopro {
         }
     }
 }
+
+function Convert-ChordProToPdf {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        # Accept filenames from the pipeline
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName', 'Path')]
+        [string]$File,
+
+        #  chordii, modern1, modern2, modern3, dark, nashville
+        # keyboard, ukulele
+        # inline, lyricsonly, musejazz
+        [string]$Style = 'modern3'
+    )
+
+    begin {
+        # Ensure chordpro is available before processing any files
+        Get-Command -Name 'chordpro.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    }
+
+    process {
+        $resolvedItem = Resolve-Path -LiteralPath $File -ErrorAction Stop
+
+        if (-not $PSCmdlet.ShouldProcess($resolvedItem, 'Convert to PDF')) {
+            return
+        }
+
+        $itemName = Split-Path -Path $File -Leaf | Split-Path -LeafBase
+
+        chordpro.exe `
+            --config="$Style" `
+            --2-up `
+            --no-csv `
+            --strict `
+            --no-chord-grids `
+            --output="$itemName.pdf" `
+            $resolvedItem
+    }
+
+    end {
+    }
+}
+
