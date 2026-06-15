@@ -10,9 +10,8 @@ function Invoke-WingetUpgrade {
         '--all', `
         '--accept-package-agreements', `
         '--accept-source-agreements', `
-        '--force', `
         '--include-unknown', `
-        '--silent'
+        '--interactive'
 
     sudo.exe --inline winget.exe upgrade @params
 }
@@ -59,3 +58,27 @@ function Invoke-ScoopUpdate {
     scoop cleanup *
 }
 
+
+# .DESCRIPTION
+# Similar to "scoop list", except that it also includes Description and Website.
+#
+# .EXAMPLE
+# .\scoop-listinfo.ps1 | ConvertTo-Csv | Out-File -FilePath ./scoop-listinfo.csv -Encoding UTF8
+# .NOTES
+# This function is designed to be used with PowerShell 7 or later.
+function Invoke-ScoopListInfo {
+    # "scoop info" is slow, so do it in parallel.
+    scoop.ps1 list | ForEach-Object -Parallel {
+        $app = '{0}/{1}' -f $_.Source, $_.Name
+        $updated = $_.Updated
+
+        $info = scoop.ps1 info $app
+        [PSCustomObject]@{
+            'App'         = $app
+            'Version'     = $info.Version
+            'Description' = $info.Description
+            'Website'     = $info.Website
+            'Updated'     = $updated
+        }
+    }
+}

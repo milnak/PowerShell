@@ -39,7 +39,6 @@ function Invoke-Normalize {
     }
 
     process {
-        Write-Verbose ('-' * 79)
         $resolveditem = Resolve-Path -LiteralPath $File -ErrorAction Stop
         $itemname = Split-Path -Path $File -Leaf | Split-Path -LeafBase
         $itemextension = Split-Path -Path $File -Leaf | Split-Path -Extension
@@ -49,6 +48,8 @@ function Invoke-Normalize {
         if (-not $PSCmdlet.ShouldProcess($resolveditem, 'Normalize')) {
             return
         }
+
+        Write-Progress -Activity "Analyzing files" -Status $itemname$itemextension
 
         $ffmpeg_args = `
             # Overwrite output files.
@@ -103,13 +104,14 @@ function Invoke-Normalize {
 
         # Gain is inverse of reported max_volume
         $gain = - [decimal]$matches['max_volume']
+        Write-Verbose "Calculated gain: $gain dB"
         if ($gain -le 1.0) {
-            Write-Output "No gain adjustment required for $itemname"
+            Write-Verbose "No gain adjustment required for $itemname"
             return
         }
+        Write-Progress -Activity "Applying gain" -Status "$itemname$itemextension"
 
         $tempfile = Join-Path -Path (Split-Path -Path $resolveditem -Parent) -ChildPath "$itemname-normalized$($itemextension)"
-        Write-Output "Applying gain of $gain dB to $itemname"
 
         $ffmpeg_args = `
             # Overwrite output files.
@@ -147,6 +149,8 @@ function Invoke-Normalize {
             Remove-Item $tempfile -ErrorAction SilentlyContinue
             return
         }
+
+        Write-Output "Applied gain of $gain dB to '$itemname$itemextension'"
 
         if ($InPlace) {
             $backupItem = "$itemname-backup$itemextension"
