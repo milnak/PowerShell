@@ -42,25 +42,31 @@ function Invoke-YtDlp {
         }
 
         # Common args
+        # '--progress-template', '"download:[download] %(progress.downloaded_bytes)s/%(progress.total_bytes)s ETA:%(progress.eta)s"', `
         $ytdlp_args = `
             '--windows-filenames', `
             '--ignore-config', `
             '--progress', `
             '--no-simulate', `
-            # '--progress-template', '"download:[download] %(progress.downloaded_bytes)s/%(progress.total_bytes)s ETA:%(progress.eta)s"', `
-            '--output-na-placeholder', 'NA',
-        '--no-playlist'
+            '--output-na-placeholder', 'NA', `
+            '--no-playlist', `
+            '--embed-metadata', `
+            '--embed-thumbnail'
 
         if ($Audio) {
+            # Audio specific args
             $ytdlp_args += `
                 '--extract-audio', `
                 '--audio-format', $Format
         }
         elseif ($Video) {
+            # Video specific args
+
             # '--format', 'bestvideo[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best'
 
             $ytdlp_args += `
-                '--format', '"bv*+ba"', '--embed-metadata'
+                '--format', `
+                '"bv*+ba"'
         }
 
         # Cookies (if file exists)
@@ -92,8 +98,12 @@ function Invoke-YtDlp {
         }
 
         $ytdlp_args += """$Uri"""
+
         Write-Verbose ('Arguments: {0}' -f ($ytdlp_args -join ' '))
-        Start-Process -FilePath 'yt-dlp.exe' -ArgumentList $ytdlp_args -NoNewWindow -Wait
+        $process = Start-Process -FilePath 'yt-dlp.exe' -ArgumentList $ytdlp_args -NoNewWindow -Wait -PassThru
+        if ($process.ExitCode -ne 0) {
+            throw "yt-dlp failed with exit code $($process.ExitCode)"
+        }
     }
 }
 
