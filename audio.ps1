@@ -150,10 +150,11 @@ function Invoke-Normalize {
             return
         }
 
-        Write-Output "Applied gain of $gain dB to '$itemname$itemextension'"
+        Write-Output ("Applied gain of {0:f1} dB to '{1}'" -f $gain, $File)
 
         if ($InPlace) {
-            $backupItem = "$itemname-backup$itemextension"
+            Write-Verbose "In-place processing for $File"
+            $backupItem = "$File-bak"
             Rename-Item -LiteralPath $resolveditem -NewName $backupItem -ErrorAction Stop
             Move-Item -LiteralPath $tempfile -Destination $resolveditem -Force -ErrorAction Stop
             Remove-Item -LiteralPath $backupItem -ErrorAction SilentlyContinue
