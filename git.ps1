@@ -326,11 +326,18 @@ Use AI to create a descriptive git commit message and commit the changes.
 Use "git commit --amend" to modify the message, then call "git push" to push the changes.
 #>
 function Invoke-GitCommitAI {
-    git.exe diff  --staged --quiet
+    git.exe branch --show-current 2> $null | Out-Null
+    IF ($LASTEXITCODE -ne 0) {
+        Write-Host -ForegroundColor Red 'Not in a git repository.'
+        return
+    }
+
+    git.exe diff --staged --quiet 2> $null
     if ($LASTEXITCODE -eq 0) {
-        Write-Warning "No changes to commit"
+        Write-Host -ForegroundColor Yellow 'No staged changes to commit.'
         git.exe status --short
         return
     }
-    copilot.exe --allow-all-tools --prompt 'create a descriptive git commit message and call git commit'
+
+    copilot.exe --allow-all --prompt 'Create a descriptive git commit message and call git commit. Do not add a co-author to the commit.'
 }

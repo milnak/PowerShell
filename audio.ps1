@@ -333,6 +333,20 @@ $totalRow
     Wraps ffmpeg.exe to encode an input file to MP3 with variable bitrate
     quality settings. Supports pipeline input of file names and optional
     output filename specification.
+.EXAMPLE
+    ConvertTo-Mp3 -InputFile '.\track.flac'
+
+    Converts track.flac to track.mp3 using the default quality setting.
+.EXAMPLE
+    ConvertTo-Mp3 -InputFile '.\track.wav' -OutputFile '.\track-v0.mp3' -Quality 0 -Force
+
+    Converts track.wav to track-v0.mp3 using higher-quality VBR settings and
+    overwrites the destination if it already exists.
+.EXAMPLE
+    Get-ChildItem '.\*.wav' -File | ConvertTo-Mp3 -Quality 3
+
+    Converts all WAV files in the current directory to MP3 using pipeline
+    input and a lower bitrate setting.
 .PARAMETER Quality
     Numeric quality level (0–9) controlling bitrate; lower is higher quality.
 .PARAMETER InputFile
