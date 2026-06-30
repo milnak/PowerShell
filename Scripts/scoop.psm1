@@ -76,3 +76,6 @@ function Invoke-ScoopListInfoMarkdown {
     }
 
 }
+
+Export-ModuleMember -Function Invoke-ScoopUpdate, Invoke-ScoopListInfo, Invoke-ScoopListInfoMarkdown
+

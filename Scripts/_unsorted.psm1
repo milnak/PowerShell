@@ -521,3 +521,8 @@ function Convert-ChordProToPdf {
     }
 }
 
+Export-ModuleMember -Function `
+    Show-ColorTable, rsync, Get-JJazzLabMeta, Invoke-7zBackup, Update-IpFilter, `
+    Format-PowerShell, Convert-SafeLink, Push-ProfileLocation, New-GuidFormat, `
+    Convert-UltimateGuitarToChopro, Convert-ChordProToPdf
+

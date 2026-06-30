@@ -107,3 +107,6 @@ function ConvertFrom-MuseScore {
         }
     }
 }
+
+Export-ModuleMember -Function ConvertFrom-MuseScore
+

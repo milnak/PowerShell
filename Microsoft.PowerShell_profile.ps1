@@ -11,27 +11,12 @@ if ($host.Name -ne 'ConsoleHost') {
 
 # Load external functions
 
-'_unsorted', `
-    'audio', `
-    'download', `
-    'filesystem', `
-    'git', `
-    'mame', `
-    'messages', `
-    'musescore', `
-    'pdf', `
-    'process', `
-    'prompt', `
-    'scoop', `
-    'sibelius', `
-    'transcribe', `
-    'update', `
-    'vscode', `
-    'windows' `
-| ForEach-Object {
-    Write-Host "Loading functions from `e[1m$($_).ps1`e[22m"
-    . "$PSScriptRoot\$_.ps1"
+Get-ChildItem "$PSScriptRoot\Scripts\*.psm1" | ForEach-Object {
+    Write-Host "Loading functions from $($_.Name)"
+    Import-Module -Name $_.FullName
 }
+
+. "$PSScriptRoot\prompt.ps1"
 
 # See also $env:USERPROFILE\OneDrive\Documents\PowerShell\profile.ps1
 Write-BoxedMessage -Message "Profile loaded from $PSScriptRoot`nPowerShell $((Get-Host).Version)"

@@ -430,3 +430,6 @@ function ConvertTo-Mp3 {
         "Processed $count files."
     }
 }
+
+Export-ModuleMember -Function Invoke-Normalize, Convert-MediaInfoToHtml, ConvertTo-Mp3
+

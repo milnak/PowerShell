@@ -201,3 +201,5 @@ function Write-Bold {
 
 }
 
+Export-ModuleMember -Function Write-BoxedMessage, mdcd, Write-Figlet, Write-Bold
+

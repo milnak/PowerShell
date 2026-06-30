@@ -15,3 +15,6 @@ function Invoke-WingetUpgrade {
 
     sudo.exe --inline winget.exe upgrade @params
 }
+
+Export-ModuleMember -Function Invoke-WingetUpgrade
+

@@ -151,3 +151,6 @@ function Get-PdfBookmarks {
         | Select-Object -Property @{Name = 'Page'; Expression = { $_.pageposfrom1 } }, @{Name = 'Title'; Expression = { $_.outlines.title } }
     }
 }
+
+Export-ModuleMember -Function Invoke-PdfSplitPages, Invoke-PdfDecrypt, Invoke-PdfMerge, Get-PdfBookmarks
+

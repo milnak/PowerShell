@@ -357,3 +357,10 @@ function Get-ChildItemTree {
 }
 
 Set-Alias -Name tree -Value Get-ChildItemTree
+
+Export-ModuleMember -Function `
+    mdcdtemp, Remove-ItemToRecycleBin, rmrf, rff, rgrep, `
+    Get-FileSha256Hash, Get-FileHashBase64, Invoke-DU, `
+    Set-SelfOwnership, Get-DiskUsage, Get-ChildItemTree `
+    -Alias tree
+

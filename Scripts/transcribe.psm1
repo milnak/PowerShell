@@ -189,3 +189,6 @@ function Invoke-FixXsc {
         Write-Verbose 'Finished XSC processing.'
     }
 }
+
+Export-ModuleMember -Function Read-Xsc, Write-Xsc, Invoke-FixXsc
+

@@ -517,3 +517,8 @@ function Convert-MameIniToText {
         }
     }
 }
+
+Export-ModuleMember -Function `
+    Get-MameListXmlLookup, Get-MameRoms, Invoke-MameUpdate, `
+    Get-MameRomList, Convert-MameIniToText
+

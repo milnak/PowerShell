@@ -83,3 +83,6 @@ function Invoke-Code {
         & $CodeCommand @codeArgs
     }
 }
+
+Export-ModuleMember -Function Invoke-Code
+

@@ -370,3 +370,8 @@ function Update-PowerShell {
     Write-Host "Installing PowerShell: $outFile"
     msiexec.exe /i $outFile /passive
 }
+
+Export-ModuleMember -Function `
+    Invoke-YtDlp, Invoke-Aria, Get-WebPage, Get-WebPageBinaries, `
+    DownloadLatestPS, Update-PowerShell
+

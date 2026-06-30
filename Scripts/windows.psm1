@@ -155,3 +155,5 @@ function Get-SystemInfo {
     }
 }
 
+Export-ModuleMember -Function Invoke-notepad, Get-UninstallPath, Path, Get-SystemInfo
+
