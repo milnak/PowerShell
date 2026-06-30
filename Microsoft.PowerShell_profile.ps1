@@ -22,6 +22,7 @@ if ($host.Name -ne 'ConsoleHost') {
     'pdf', `
     'process', `
     'prompt', `
+    'scoop', `
     'sibelius', `
     'transcribe', `
     'update', `
