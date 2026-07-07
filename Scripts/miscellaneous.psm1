@@ -402,7 +402,7 @@ function New-GuidFormat {
     Input text from the pipeline. Each incoming object is treated as one line.
     Multi-line strings are split into individual lines.
 .EXAMPLE
-    Get-Clipboard | Convert-UltimateGuitarToChopro
+    Get-Clipboard -Raw | Convert-UltimateGuitarToChopro
 
     Converts clipboard text piped in as lines.
 .EXAMPLE
@@ -439,17 +439,23 @@ function Convert-UltimateGuitarToChopro {
         }
 
         if ($InputObject -match "`r|`n") {
-            [Regex]::Split($InputObject, "`r?`n") | ForEach-Object { $content.Add($_) }
+            [Regex]::Split($InputObject, "`r?`n") | ForEach-Object {
+                if (-not [string]::IsNullOrWhiteSpace($_)) {
+                    $content.Add($_)
+                    Write-Verbose "Added line: $_"
+                }
+            }
         }
         else {
             $content.Add($InputObject)
+            Write-Verbose "Added line: $InputObject"
         }
     }
 
     end {
         if ($content.Count % 2 -ne 0) {
             Write-Host -ForegroundColor Red "The input does not have an even number of lines."
-            return 1
+            return
         }
 
         for ($i = 0; $i -lt $content.Count; $i += 2) {
@@ -521,8 +527,116 @@ function Convert-ChordProToPdf {
     }
 }
 
+<#
+.SYNOPSIS
+    Back up MobileSheets app data to an rclone remote.
+.DESCRIPTION
+    Copies the MobileSheets LocalState content directory to a dated folder
+    on an rclone remote (default: onedrive:MobileSheets_Backup/yyyy-MM-dd).
+    Supports WhatIf/Confirm, validates source and rclone availability, and
+    returns a structured summary object after completion.
+.PARAMETER ContentDirectory
+    MobileSheets content folder to back up.
+.PARAMETER RemoteName
+    Name of the configured rclone remote.
+.PARAMETER RemoteBasePath
+    Base path on the remote where dated backups are stored.
+.PARAMETER DateFormat
+    Date format used to build the dated backup folder name.
+.PARAMETER MultiThreadStreams
+    Value passed to --multi-thread-streams.
+.PARAMETER MultiThreadChunkSize
+    Value passed to --multi-thread-chunk-size.
+.PARAMETER Retries
+    Number of retries for transient rclone failures.
+.PARAMETER RetriesSleep
+    Delay between retry attempts (rclone duration format).
+.EXAMPLE
+    Invoke-MobileSheetsBackup -Verbose
+#>
+function Invoke-MobileSheetsBackup {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+    param(
+        [ValidateNotNullOrEmpty()]
+        [string]$ContentDirectory = "$env:LocalAppData\Packages\41730Zubersoft.MobileSheets_ys1c8ct2g6ypr\LocalState",
+
+        [ValidateNotNullOrEmpty()]
+        [string]$RemoteName = 'onedrive',
+
+        [ValidateNotNullOrEmpty()]
+        [string]$RemoteBasePath = 'MobileSheets_Backup',
+
+        [ValidateNotNullOrEmpty()]
+        [string]$DateFormat = 'yyyy-MM-dd',
+
+        [ValidateRange(1, 128)]
+        [int]$MultiThreadStreams = 4,
+
+        [ValidatePattern('^\d+[KMGTP]?B?$')]
+        [string]$MultiThreadChunkSize = '64M',
+
+        [ValidateRange(0, 100)]
+        [int]$Retries = 3,
+
+        [ValidatePattern('^\d+[smhdw]$')]
+        [string]$RetriesSleep = '10s'
+    )
+
+    if (-not (Test-Path -LiteralPath $ContentDirectory -PathType Container)) {
+        throw "Content directory not found: $ContentDirectory"
+    }
+
+    try {
+        $rclonePath = (Get-Command 'rclone.exe' -CommandType Application -ErrorAction Stop).Source
+    }
+    catch {
+        throw "Unable to find rclone.exe. Install rclone and ensure it is in PATH. $($_.Exception.Message)"
+    }
+
+    $timestamp = Get-Date -Format $DateFormat
+    $remotePath = '{0}:{1}/{2}' -f $RemoteName, $RemoteBasePath.Trim('/'), $timestamp
+
+    Write-Verbose "Backing up MobileSheets content from '$ContentDirectory' to '$remotePath'"
+
+    if (-not $PSCmdlet.ShouldProcess($remotePath, 'Copy MobileSheets content with rclone')) {
+        return
+    }
+
+    $startedAt = Get-Date
+
+    # rclone copy creates destination directories as needed and copies source contents into them.
+    $rcloneArgs = @(
+        $ContentDirectory
+        $remotePath
+        '--progress'
+        '--multi-thread-streams', $MultiThreadStreams
+        '--multi-thread-chunk-size', $MultiThreadChunkSize
+        '--retries', $Retries
+        '--retries-sleep', $RetriesSleep
+    )
+    & $rclonePath copy @rcloneArgs
+    $exitCode = $LASTEXITCODE
+    $finishedAt = Get-Date
+    $duration = $finishedAt - $startedAt
+
+    if ($exitCode -ne 0) {
+        throw "rclone failed with exit code $exitCode while copying to '$remotePath'."
+    }
+
+    [PSCustomObject]@{
+        ContentDirectory = $ContentDirectory
+        RemotePath       = $remotePath
+        RclonePath       = $rclonePath
+        StartedAt        = $startedAt
+        FinishedAt       = $finishedAt
+        DurationSeconds  = [math]::Round($duration.TotalSeconds, 2)
+        ExitCode         = $exitCode
+        Succeeded        = $true
+    }
+}
+
 Export-ModuleMember -Function `
     Show-ColorTable, rsync, Get-JJazzLabMeta, Invoke-7zBackup, Update-IpFilter, `
     Format-PowerShell, Convert-SafeLink, Push-ProfileLocation, New-GuidFormat, `
-    Convert-UltimateGuitarToChopro, Convert-ChordProToPdf
+    Convert-UltimateGuitarToChopro, Convert-ChordProToPdf, Invoke-MobileSheetsBackup
 

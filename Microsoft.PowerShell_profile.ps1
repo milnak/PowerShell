@@ -16,9 +16,6 @@ Get-ChildItem "$PSScriptRoot\Scripts\*.psm1" | ForEach-Object {
     Import-Module -Name $_.FullName
 }
 
-. "$PSScriptRoot\prompt.ps1"
-
-# See also $env:USERPROFILE\OneDrive\Documents\PowerShell\profile.ps1
 Write-BoxedMessage -Message "Profile loaded from $PSScriptRoot`nPowerShell $((Get-Host).Version)"
 
 Set-PSReadlineKeyHandler -Key UpArrow -Function HistorySearchBackward
@@ -34,6 +31,9 @@ Get-ChildItem -LiteralPath $wingetPackagesPath -Recurse -Filter '*.exe' -ErrorAc
     '  {0}: {1}' -f [IO.Path]::GetRelativePath("$env:LocalAppData\Microsoft\Winget\Packages", $_.Name), ($exes -join ', ')
     $env:Path += ";$($_.Name)"
 }
+
+# Set the prompt
+. "$PSScriptRoot\prompt.ps1"
 
 # zoxide, needs to come AFTER setting prompt!
 if ((Get-Command -Name 'zoxide.exe' -CommandType Application -ErrorAction SilentlyContinue)) {

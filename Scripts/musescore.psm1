@@ -25,7 +25,7 @@
     ConvertFrom-MuseScore -File "myscore.mscz"
 
 .EXAMPLE
-    Get-ChildItem *.mscz | ConvertFrom-MuseScore
+    Get-ChildItem '../*.mscz' | ConvertFrom-MuseScore -Extract Parts
 
 .EXAMPLE
     'a.mscz','b.mscz' | ConvertFrom-MuseScore -Extract ScoreAndParts
@@ -56,7 +56,7 @@ function ConvertFrom-MuseScore {
     process {
         $path = Resolve-Path -LiteralPath $File -ErrorAction Stop
 
-        Write-Host ('Processing "{0}"...' -f $path)
+        Write-Host "Processing '$(Split-Path -Leaf $path)'..."
 
         Write-Host '* Extracting JSON'
         $musescoreJsonFile = [IO.Path]::Combine([IO.Path]::GetTempPath(), "musescore-$([IO.Path]::GetRandomFileName()).json")
