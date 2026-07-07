@@ -532,7 +532,7 @@ function Convert-ChordProToPdf {
     Back up MobileSheets app data to an rclone remote.
 .DESCRIPTION
     Copies the MobileSheets LocalState content directory to a dated folder
-    on an rclone remote (default: onedrive:MobileSheets_Backup/yyyy-MM-dd).
+    on an rclone remote.
     Supports WhatIf/Confirm, validates source and rclone availability, and
     returns a structured summary object after completion.
 .PARAMETER ContentDirectory
@@ -541,16 +541,6 @@ function Convert-ChordProToPdf {
     Name of the configured rclone remote.
 .PARAMETER RemoteBasePath
     Base path on the remote where dated backups are stored.
-.PARAMETER DateFormat
-    Date format used to build the dated backup folder name.
-.PARAMETER MultiThreadStreams
-    Value passed to --multi-thread-streams.
-.PARAMETER MultiThreadChunkSize
-    Value passed to --multi-thread-chunk-size.
-.PARAMETER Retries
-    Number of retries for transient rclone failures.
-.PARAMETER RetriesSleep
-    Delay between retry attempts (rclone duration format).
 .EXAMPLE
     Invoke-MobileSheetsBackup -Verbose
 #>
@@ -561,25 +551,10 @@ function Invoke-MobileSheetsBackup {
         [string]$ContentDirectory = "$env:LocalAppData\Packages\41730Zubersoft.MobileSheets_ys1c8ct2g6ypr\LocalState",
 
         [ValidateNotNullOrEmpty()]
-        [string]$RemoteName = 'onedrive',
+        [string]$RemoteName = 'gdrive',
 
         [ValidateNotNullOrEmpty()]
-        [string]$RemoteBasePath = 'MobileSheets_Backup',
-
-        [ValidateNotNullOrEmpty()]
-        [string]$DateFormat = 'yyyy-MM-dd',
-
-        [ValidateRange(1, 128)]
-        [int]$MultiThreadStreams = 4,
-
-        [ValidatePattern('^\d+[KMGTP]?B?$')]
-        [string]$MultiThreadChunkSize = '64M',
-
-        [ValidateRange(0, 100)]
-        [int]$Retries = 3,
-
-        [ValidatePattern('^\d+[smhdw]$')]
-        [string]$RetriesSleep = '10s'
+        [string]$RemoteBasePath = 'MobileSheets_Backup'
     )
 
     if (-not (Test-Path -LiteralPath $ContentDirectory -PathType Container)) {
@@ -593,10 +568,10 @@ function Invoke-MobileSheetsBackup {
         throw "Unable to find rclone.exe. Install rclone and ensure it is in PATH. $($_.Exception.Message)"
     }
 
-    $timestamp = Get-Date -Format $DateFormat
+    $timestamp = Get-Date -Format 'yyyy-MM-dd'
     $remotePath = '{0}:{1}/{2}' -f $RemoteName, $RemoteBasePath.Trim('/'), $timestamp
 
-    Write-Verbose "Backing up MobileSheets content from '$ContentDirectory' to '$remotePath'"
+    Write-Host "Backing up MobileSheets content from '$ContentDirectory' to '$remotePath'"
 
     if (-not $PSCmdlet.ShouldProcess($remotePath, 'Copy MobileSheets content with rclone')) {
         return
@@ -609,30 +584,16 @@ function Invoke-MobileSheetsBackup {
         $ContentDirectory
         $remotePath
         '--progress'
-        '--multi-thread-streams', $MultiThreadStreams
-        '--multi-thread-chunk-size', $MultiThreadChunkSize
-        '--retries', $Retries
-        '--retries-sleep', $RetriesSleep
     )
     & $rclonePath copy @rcloneArgs
     $exitCode = $LASTEXITCODE
-    $finishedAt = Get-Date
-    $duration = $finishedAt - $startedAt
-
     if ($exitCode -ne 0) {
         throw "rclone failed with exit code $exitCode while copying to '$remotePath'."
     }
 
-    [PSCustomObject]@{
-        ContentDirectory = $ContentDirectory
-        RemotePath       = $remotePath
-        RclonePath       = $rclonePath
-        StartedAt        = $startedAt
-        FinishedAt       = $finishedAt
-        DurationSeconds  = [math]::Round($duration.TotalSeconds, 2)
-        ExitCode         = $exitCode
-        Succeeded        = $true
-    }
+    $finishedAt = Get-Date
+
+    Write-Host "Backup completed successfully in $([math]::Round(($finishedAt - $startedAt).TotalSeconds, 2)) seconds."
 }
 
 Export-ModuleMember -Function `
