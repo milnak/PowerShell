@@ -201,5 +201,74 @@ function Write-Bold {
 
 }
 
-Export-ModuleMember -Function Write-BoxedMessage, mdcd, Write-Figlet, Write-Bold
+<#
+.EXAMPLES
+Get-Content '.\vcpkg.json','.\Directory.Build.props' | Get-ContentWithRainbow
+
+Get-Content '.\vcpkg.json' | Get-ContentWithRainbow -NumberLines
+
+'.\vcpkg.json','.\Directory.Build.props' | Get-ContentWithRainbow -NumberLines
+
+Get-ChildItem '.props' | Select-Object -ExpandProperty FullName | Get-ContentWithRainbow -Frequency 0.5
+
+'Hello", "World' | Get-ContentWithRainbow
+
+'file1.txt', "Some text" | Get-ContentWithRainbow -NumberLines
+#>
+function Get-ContentWithRainbow {
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [object] $InputObject,
+        [double] $Frequency = 0.3,
+        [switch] $NumberLines
+    )
+    begin {
+        $lineCounter = 1
+    }
+    process {
+        function Get-RainbowColor {
+            param(
+                [double]$Freq,
+                [double]$I
+            )
+            @{
+                Red   = [int]([Math]::Sin($Freq * $I + 0) * 127 + 128)
+                Green = [int]([Math]::Sin($Freq * $I + (2 * [Math]::PI / 3)) * 127 + 128)
+                Blue  = [int]([Math]::Sin($Freq * $I + (4 * [Math]::PI / 3)) * 127 + 128)
+            }
+        }
+        if ($InputObject -is [string] -and (Test-Path -LiteralPath $InputObject)) {
+            # If the input is a file path and exists, read it
+            $lines = Get-Content -LiteralPath $InputObject
+            foreach ($line in $lines) {
+                $color = Get-RainbowColor -Freq $Frequency -I $lineCounter
+                Write-Verbose "`R=$($color.Red); G=$($color.Green); B=$($color.Blue)"
+                if ($NumberLines) {
+                    Write-Host ("{0,4}: `e[38;2;$($color.Red);$($color.Green);$($color.Blue)m{1}`e[0m" -f $lineCounter, $line)
+                }
+                else {
+                    Write-Host "`e[38;2;$($color.Red);$($color.Green);$($color.Blue)m$($line)`e[0m"
+                }
+                $lineCounter++
+            }
+        }
+        else {
+            # Treat as raw text input
+            $line = $InputObject
+            $color = Get-RainbowColor -Freq $Frequency -I $lineCounter
+            if ($NumberLines) {
+                Write-Host ("{0,4}: `e[38;2;$($color.Red);$($color.Green);$($color.Blue)m{1}`e[0m" -f $lineCounter, $line)
+            }
+            else {
+                Write-Host "`e[38;2;$($color.Red);$($color.Green);$($color.Blue)m$($line)`e[0m"
+            }
+            $lineCounter++
+        }
+    }
+}
+
+Export-ModuleMember -Function Write-BoxedMessage, mdcd, Write-Figlet, Write-Bold, Get-ContentWithRainbow
 
