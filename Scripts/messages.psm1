@@ -207,13 +207,11 @@ Get-Content '.\vcpkg.json','.\Directory.Build.props' | Get-ContentWithRainbow
 
 Get-Content '.\vcpkg.json' | Get-ContentWithRainbow -NumberLines
 
-'.\vcpkg.json','.\Directory.Build.props' | Get-ContentWithRainbow -NumberLines
+Get-ChildItem | Get-ContentWithRainbow -Frequency 0.5
 
-Get-ChildItem '.props' | Select-Object -ExpandProperty FullName | Get-ContentWithRainbow -Frequency 0.5
+"1`n2`n3`n4`n5`n6`n7`n8`n9" | Get-ContentWithRainbow -NumberLines
 
-'Hello", "World' | Get-ContentWithRainbow
-
-'file1.txt', "Some text" | Get-ContentWithRainbow -NumberLines
+1..20 | Get-ContentWithRainbow -NumberLines
 #>
 function Get-ContentWithRainbow {
     [CmdletBinding()]
@@ -243,22 +241,13 @@ function Get-ContentWithRainbow {
         if ($InputObject -is [string] -and (Test-Path -LiteralPath $InputObject)) {
             # If the input is a file path and exists, read it
             $lines = Get-Content -LiteralPath $InputObject
-            foreach ($line in $lines) {
-                $color = Get-RainbowColor -Freq $Frequency -I $lineCounter
-                Write-Verbose "`R=$($color.Red); G=$($color.Green); B=$($color.Blue)"
-                if ($NumberLines) {
-                    Write-Host ("{0,4}: `e[38;2;$($color.Red);$($color.Green);$($color.Blue)m{1}`e[0m" -f $lineCounter, $line)
-                }
-                else {
-                    Write-Host "`e[38;2;$($color.Red);$($color.Green);$($color.Blue)m$($line)`e[0m"
-                }
-                $lineCounter++
-            }
         }
         else {
-            # Treat as raw text input
-            $line = $InputObject
+            $lines = $InputObject -split "`n`r?"
+        }
+        foreach ($line in $lines) {
             $color = Get-RainbowColor -Freq $Frequency -I $lineCounter
+            Write-Verbose "`R=$($color.Red); G=$($color.Green); B=$($color.Blue)"
             if ($NumberLines) {
                 Write-Host ("{0,4}: `e[38;2;$($color.Red);$($color.Green);$($color.Blue)m{1}`e[0m" -f $lineCounter, $line)
             }
