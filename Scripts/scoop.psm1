@@ -46,10 +46,15 @@ function Invoke-ScoopUpdate {
 # Similar to "scoop list", except that it also includes Description and Website.
 #
 # .EXAMPLE
-# Invoke-ScoopListInfo
-# | Select-Object @{Name='App'; Expression={"$($_.Source)/$($_.Name)"}},Version,Description,Website,@{Name='Updated'; Expression={[DateTime]$_.'Updated at'}}
-# | ConvertTo-Csv
+# Convert output to CSV
+#
+# Invoke-ScoopListInfo `
+# | Select-Object @{Name='App'; Expression={"$($_.Source)/$($_.Name)"}},Version,Description,Website,@{Name='Updated'; Expression={[DateTime]$_.'Updated at'}} `
+# | ConvertTo-Csv `
 # | Out-File -FilePath ./scoop-listinfo.csv -Encoding UTF8
+#
+# .SEE ALSO
+# Invoke-ScoopListInfoMarkdown
 #
 # .NOTES
 # This function is designed to be used with PowerShell 7 or later.
@@ -60,14 +65,21 @@ function Invoke-ScoopListInfo {
     }
 }
 
+# .DESCRIPTION
+# Outputs Scoop package information as Markdown grouped by bucket.
+#
+# .EXAMPLE
+# Invoke-ScoopListInfoMarkdown | Out-File -FilePath ./scoop-listinfo.md -Encoding UTF8
 function Invoke-ScoopListInfoMarkdown {
-    "# Scoop List`n"
+    '# Scoop List'
+    ''
     Invoke-ScoopListInfo
     | Select-Object Source, Name, Version, Description, Website, @{Name = 'Updated'; Expression = { [DateTime]$_.'Updated at' } }
     | Sort-Object Source, Name
     | Group-Object Source
     | ForEach-Object {
-        "## Bucket: $($_.Name)`n"
+        "## Bucket: $($_.Name)"
+        ''
         $_.Group
         | ForEach-Object {
             "* [$($_.Name)]($($_.Website)) ($($_.Version), $($_.Updated)) - $($_.Description.Trim())"
