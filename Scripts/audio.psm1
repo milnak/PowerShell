@@ -197,66 +197,66 @@ function Convert-MediaInfoToHtml {
     }
 
     process {
-    function Format-Size {
-        param(
-            [Parameter(Mandatory)][double]$Bytes
-        )
+        function Format-Size {
+            param(
+                [Parameter(Mandatory)][double]$Bytes
+            )
 
-        switch ([math]::Max($Bytes, 0)) {
-            { $_ -ge 1GB } { return "{0:N1} GB" -f ($Bytes / 1GB) }
-            { $_ -ge 1MB } { return "{0:N1} MB" -f ($Bytes / 1MB) }
-            { $_ -ge 1KB } { return "{0:N1} KB" -f ($Bytes / 1KB) }
-            default { return "$Bytes B" }
+            switch ([math]::Max($Bytes, 0)) {
+                { $_ -ge 1GB } { return "{0:N1} GB" -f ($Bytes / 1GB) }
+                { $_ -ge 1MB } { return "{0:N1} MB" -f ($Bytes / 1MB) }
+                { $_ -ge 1KB } { return "{0:N1} KB" -f ($Bytes / 1KB) }
+                default { return "$Bytes B" }
+            }
         }
-    }
 
-    # Collect metadata
-    $files = Get-ChildItem -Path $Path -File -Recurse -Include '*.mp3', '*.flac' |
-    ForEach-Object {
-        $metadata = ffprobe.exe -loglevel quiet `
-            -show_entries stream=bit_rate `
-            -show_format `
-            -print_format json `
-            $_.FullName | ConvertFrom-Json
+        # Collect metadata
+        $files = Get-ChildItem -Path $Path -File -Recurse -Include '*.mp3', '*.flac' |
+        ForEach-Object {
+            $metadata = ffprobe.exe -loglevel quiet `
+                -show_entries stream=bit_rate `
+                -show_format `
+                -print_format json `
+                $_.FullName | ConvertFrom-Json
 
-        [PSCustomObject]@{
-            Name          = $_.Name
-            DirectoryName = $_.DirectoryName
-            Artist        = $metadata.format.tags.artist
-            Album         = $metadata.format.tags.album
-            Title         = $metadata.format.tags.title
-            Year          = $metadata.format.tags.date
-            Genre         = $metadata.format.tags.genre
-            Track         = [int]$metadata.format.tags.track
-            Size          = [double]$metadata.format.size
-            Duration      = [TimeSpan]::FromSeconds([Math]::Round($metadata.format.duration))
-            BitRate       = @($metadata.streams.bit_rate)[0] / 1000
+            [PSCustomObject]@{
+                Name          = $_.Name
+                DirectoryName = $_.DirectoryName
+                Artist        = $metadata.format.tags.artist
+                Album         = $metadata.format.tags.album
+                Title         = $metadata.format.tags.title
+                Year          = $metadata.format.tags.date
+                Genre         = $metadata.format.tags.genre
+                Track         = [int]$metadata.format.tags.track
+                Size          = [double]$metadata.format.size
+                Duration      = [TimeSpan]::FromSeconds([Math]::Round($metadata.format.duration))
+                BitRate       = @($metadata.streams.bit_rate)[0] / 1000
+            }
         }
-    }
 
-    if (-not $HtmlOutput) {
-        return $files | Sort-Object Track | Group-Object DirectoryName
-    }
+        if (-not $HtmlOutput) {
+            return $files | Sort-Object Track | Group-Object DirectoryName
+        }
 
-    # Prepare totals
-    $TotalCount = $files.Count
-    $TotalDurationSeconds = ($files.Duration.TotalSeconds | Measure-Object -Sum).Sum
-    $TotalSize = ($files.Size | Measure-Object -Sum).Sum
-    $TotalTimeSpan = [TimeSpan]::FromSeconds($TotalDurationSeconds)
+        # Prepare totals
+        $TotalCount = $files.Count
+        $TotalDurationSeconds = ($files.Duration.TotalSeconds | Measure-Object -Sum).Sum
+        $TotalSize = ($files.Size | Measure-Object -Sum).Sum
+        $TotalTimeSpan = [TimeSpan]::FromSeconds($TotalDurationSeconds)
 
-    # Build HTML rows
-    $rows = foreach ($group in $files | Sort-Object Track | Group-Object DirectoryName) {
+        # Build HTML rows
+        $rows = foreach ($group in $files | Sort-Object Track | Group-Object DirectoryName) {
 
-        # Directory header row
-        @"
+            # Directory header row
+            @"
 <tr bgcolor="#E9E3C7">
     <td colspan="10"><font face="Verdana" size="2">$($group.Name)</font></td>
 </tr>
 "@
 
-        # File rows
-        foreach ($item in $group.Group) {
-            @"
+            # File rows
+            foreach ($item in $group.Group) {
+                @"
 <tr bgcolor="#C4CEDF">
     <td><font face="Verdana" size="2">$($item.Name)</font></td>
     <td><font face="Verdana" size="2">$($item.Artist)</font></td>
@@ -270,11 +270,11 @@ function Convert-MediaInfoToHtml {
     <td align="right"><font face="Verdana" size="2">$(Format-Size $item.Size)</font></td>
 </tr>
 "@
+            }
         }
-    }
 
-    # Totals row
-    $totalRow = @"
+        # Totals row
+        $totalRow = @"
 <tr bgcolor="#E9E3C7">
     <td colspan="10" align="center">
         <b><font face="Verdana" size="2">
@@ -286,8 +286,8 @@ function Convert-MediaInfoToHtml {
 </tr>
 "@
 
-    # Final HTML
-    @"
+        # Final HTML
+        @"
 <html>
 <head>
 <title>Music files report</title>
@@ -431,5 +431,124 @@ function ConvertTo-Mp3 {
     }
 }
 
-Export-ModuleMember -Function Invoke-Normalize, Convert-MediaInfoToHtml, ConvertTo-Mp3
+<#
+.SYNOPSIS
+    Combines multiple audio files into a single multi-track Ogg Vorbis file.
+
+.DESCRIPTION
+    Accepts one or more audio files via the pipeline and encodes them as
+    separate audio tracks in a single Ogg Vorbis (.ogg) container using
+    ffmpeg. Each track is encoded with the libvorbis codec and labeled with
+    the source file's base name as its track title metadata.
+
+.PARAMETER File
+    One or more paths to input audio files. Accepts pipeline input, including
+    objects with FullName or Path properties (e.g. from Get-ChildItem).
+
+.PARAMETER OggFile
+    Base name (without extension) of the output .mogg file. The .mogg extension
+    is appended automatically.
+
+.PARAMETER Force
+    Overwrite the output file if it already exists. Without this switch,
+    ffmpeg will fail if the destination file is present.
+
+.EXAMPLE
+    Get-ChildItem -File 'Bertha - *.mp3' | ConvertTo-MultitrackOgg -OggFile 'out'
+
+    Combines all matching MP3 files into out.ogg, each as a separate audio track.
+
+.EXAMPLE
+    ConvertTo-MultitrackOgg -File 'left.flac', 'right.flac' -OggFile 'stereo-pair'
+
+    Combines two FLAC files into stereo-pair.ogg with two audio tracks.
+#>
+function ConvertTo-MultitrackOgg {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        # Accept filenames from the pipeline
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName', 'Path')]
+        [string]$File,
+
+        [Parameter(Mandatory)]
+        [string]$OggFile,
+
+        # Overwrite the output file if it already exists.
+        [switch]$Force
+    )
+
+    begin {
+        Get-Command -Name 'ffmpeg.exe' -CommandType Application -ErrorAction Stop | Out-Null
+
+        Write-Verbose 'Begin'
+
+        $files = [System.Collections.Generic.List[string]]::new()
+    }
+
+    process {
+        $path = (Resolve-Path -LiteralPath $File -ErrorAction Stop).Path
+        Write-Verbose "Adding '$path'"
+        $files.Add($path)
+    }
+
+    end {
+        if ($files.Count -eq 0) {
+            Write-Warning 'No files added'
+            return
+        }
+
+        $destination = "$OggFile.mogg"
+
+        if (-not $PSCmdlet.ShouldProcess($destination, 'Create multi-track Ogg')) {
+            return
+        }
+
+        $ffmpegArgs = [System.Collections.Generic.List[string]]::new()
+
+        # Keep ffmpeg quiet and non-interactive
+        $ffmpegArgs.AddRange([string[]]('-loglevel', 'warning', '-hide_banner', '-nostats', '-nostdin'))
+
+        if ($Force) {
+            $ffmpegArgs.Add('-y')
+        }
+
+        # Specify input files
+        for ($track = 0; $track -lt $files.Count; $track++) {
+            $ffmpegArgs.Add('-i')
+            $ffmpegArgs.Add($files[$track])
+        }
+
+        # Map each input to an audio stream
+        for ($track = 0; $track -lt $files.Count; $track++) {
+            $ffmpegArgs.Add('-map')
+            $ffmpegArgs.Add("$($track):a")
+        }
+
+        # Specify codec and track title metadata for each stream
+        for ($track = 0; $track -lt $files.Count; $track++) {
+            $ffmpegArgs.Add("-c:a:$($track)")
+            $ffmpegArgs.Add('libvorbis')
+
+            $ffmpegArgs.Add("-metadata:s:a:$($track)")
+            $ffmpegArgs.Add('title={0}' -f [IO.Path]::GetFileNameWithoutExtension($files[$track]))
+        }
+
+        $ffmpegArgs.Add($destination)
+
+        Write-Verbose ($ffmpegArgs -join ' ')
+
+        & ffmpeg.exe @ffmpegArgs
+        if ($LASTEXITCODE -eq 0) {
+            Write-Output "Created '$destination' with $($files.Count) audio track(s)."
+        }
+        else {
+            Write-Warning "ffmpeg exited with code $LASTEXITCODE"
+        }
+
+        Write-Verbose 'End'
+    }
+}
+
+Export-ModuleMember -Function Invoke-Normalize, Convert-MediaInfoToHtml, ConvertTo-Mp3, ConvertTo-MultitrackOgg
 

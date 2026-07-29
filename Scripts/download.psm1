@@ -371,7 +371,53 @@ function Update-PowerShell {
     msiexec.exe /i $outFile /passive
 }
 
+<#
+.SYNOPSIS
+    Download and flatten English subtitles into a plain text transcript.
+.DESCRIPTION
+    Uses yt-dlp to fetch English subtitles (manual or automatic), converts them
+    to SRT, removes duplicate/metadata lines, and writes a single text file
+    named after the video title.
+.PARAMETER Uri
+    URL of the media to process.
+#>
+function Invoke-YtDlpSubtitles {
+    [Parameter(Mandatory = $true)]
+    [string]$Uri
+
+    $srt = 'output.en.srt'
+
+    $output = & yt-dlp.exe --quiet --dump-json --skip-download --no-warnings --playlist-items 1:1 $Uri 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning 'Failed to get video information from yt-dlp. Check the output for details.'
+        return
+    }
+
+    $json = $output | ConvertFrom-Json
+    $title = $json.title
+
+    yt-dlp.exe `
+        --skip-download `
+        --write-subs `
+        --write-automatic-subs `
+        --sub-lang en `
+        --convert-subs srt `
+        --output 'output.%(ext)s' `
+        $Uri
+
+    $prev = $null
+    $result = foreach ($l in (Get-Content -LiteralPath $srt)) {
+        $line = $l.Trim()
+        if ($line -ne $prev -and $line -ne '' -and $line -notmatch '^\d+$' -and $line -notmatch '-->') {
+            $line
+            $prev = $line
+        }
+    }
+    $result -join ' ' | Out-File -FilePath "$title.txt" -Encoding UTF8
+
+    Remove-Item -LiteralPath $srt
+}
+
 Export-ModuleMember -Function `
-    Invoke-YtDlp, Invoke-Aria, Get-WebPage, Get-WebPageBinaries, `
-    DownloadLatestPS, Update-PowerShell
+    Invoke-YtDlp, Invoke-YtDlpSubtitles, Invoke-Aria, Get-WebPage, Get-WebPageBinaries, DownloadLatestPS, Update-PowerShell
 

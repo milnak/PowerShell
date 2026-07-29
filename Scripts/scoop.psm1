@@ -82,7 +82,7 @@ function Invoke-ScoopListInfoMarkdown {
         ''
         $_.Group
         | ForEach-Object {
-            "* [$($_.Name)]($($_.Website)) ($($_.Version), $($_.Updated)) - $($_.Description.Trim())"
+            "* [$($_.Name)]($($_.Website)) ($($_.Version), $($_.Updated.ToString('yyyy-MM-dd'))) - $($_.Description.Trim())"
         }
         ''
     }
