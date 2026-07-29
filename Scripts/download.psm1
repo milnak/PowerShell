@@ -380,44 +380,86 @@ function Update-PowerShell {
     named after the video title.
 .PARAMETER Uri
     URL of the media to process.
+.EXAMPLE
+    yt-dlp.exe --flat-playlist --get-id 'https://www.youtube.com/playlist?list=PLh-aFbHYodb5ri0UV3saSh9JFyuBE8W6q' | Invoke-YtDlpSubtitles
 #>
 function Invoke-YtDlpSubtitles {
-    [Parameter(Mandatory = $true)]
-    [string]$Uri
+    [CmdletBinding()]
+    param(
+        # ValueFromPipeline:
+        #   Accept input directly from the pipeline. PowerShell will pass entire pipeline objects to that parameter.
+        # ValueFromPipelineByPropertyName:
+        #   Allows a parameter to accept values from a property in the incoming pipeline object that has the same name as the parameter.
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [string]$Uri
+    )
 
-    $srt = 'output.en.srt'
+    begin {
+        Write-Verbose '[begin]'
+        # Ensure yt-dlp is available before processing any files
+        Get-Command -Name 'yt-dlp.exe' -CommandType Application -ErrorAction Stop | Out-Null
 
-    $output = & yt-dlp.exe --quiet --dump-json --skip-download --no-warnings --playlist-items 1:1 $Uri 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning 'Failed to get video information from yt-dlp. Check the output for details.'
-        return
+        $srtOutputPrefix = 'output'
+        $srtFile = "$($srtOutputPrefix).en.srt"
     }
 
-    $json = $output | ConvertFrom-Json
-    $title = $json.title
+    process {
+        Write-Verbose '[process]'
 
-    yt-dlp.exe `
-        --skip-download `
-        --write-subs `
-        --write-automatic-subs `
-        --sub-lang en `
-        --convert-subs srt `
-        --output 'output.%(ext)s' `
-        $Uri
-
-    $prev = $null
-    $result = foreach ($l in (Get-Content -LiteralPath $srt)) {
-        $line = $l.Trim()
-        if ($line -ne $prev -and $line -ne '' -and $line -notmatch '^\d+$' -and $line -notmatch '-->') {
-            $line
-            $prev = $line
+        Write-Verbose "Fetching video information for URI: $Uri"
+        $output = & yt-dlp.exe --quiet --dump-json --skip-download --no-warnings --playlist-items 1:1 $Uri 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning 'Failed to get video information. Check the output for details.'
+            Write-Host $output
+            return
         }
-    }
-    $result -join ' ' | Out-File -FilePath "$title.txt" -Encoding UTF8
 
-    Remove-Item -LiteralPath $srt
+        $json = $output | ConvertFrom-Json
+        $title = $json.title
+
+        Write-Host "Processing video: $title"
+
+        # Passing 'output.%(ext)s' to yt-dlp will result in the subtitle file being named 'output.en.srt'
+        Write-Verbose 'Downloading subtitles'
+        $output = yt-dlp.exe `
+            --skip-download `
+            --write-subs `
+            --write-automatic-subs `
+            --sub-lang en `
+            --convert-subs srt `
+            --output "$srtOutputPrefix.%(ext)s" `
+            $Uri 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning 'Failed to download subtitles. Check the output for details.'
+            Write-Host $output
+            return
+        }
+
+        Write-Verbose 'Processing subtitles'
+        $prev = $null
+        $result = foreach ($l in (Get-Content -LiteralPath $srtFile)) {
+            $line = $l.Trim()
+            if ($line -ne $prev -and $line -ne '' -and $line -notmatch '^\d+$' -and $line -notmatch '-->') {
+                $line
+                $prev = $line
+            }
+        }
+
+        # Make title into a DOS friendly filename
+        $safeFilename = [regex]::Replace($title, ('[{0}]' -f [regex]::Escape( -join ([IO.Path]::GetInvalidFileNameChars()))), '_')
+
+        Write-Verbose "Writing transcript: $safeFilename"
+        $result -join ' ' | Out-File -FilePath "$safeFilename.txt" -Encoding UTF8
+
+        Write-Verbose "Removing temporary subtitle file: $srtFile"
+        Remove-Item -LiteralPath $srtFile
+    }
+
+    end {
+        Write-Verbose '[end]'
+    }
 }
 
 Export-ModuleMember -Function `
-    Invoke-YtDlp, Invoke-YtDlpSubtitles, Invoke-Aria, Get-WebPage, Get-WebPageBinaries, DownloadLatestPS, Update-PowerShell
+    Invoke-YtDlp, Invoke-Aria, Get-WebPage, Get-WebPageBinaries, DownloadLatestPS, Update-PowerShell, Invoke-YtDlpSubtitles
 
