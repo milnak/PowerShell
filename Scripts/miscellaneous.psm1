@@ -401,13 +401,8 @@ function New-GuidFormat {
 .PARAMETER InputObject
     Input text from the pipeline. Each incoming object is treated as one line.
     Multi-line strings are split into individual lines.
-.EXAMPLE
-    Get-Clipboard -Raw | Convert-UltimateGuitarToChopro
 
-    Converts clipboard text piped in as lines.
 .EXAMPLE
-    song.txt
-    ========
              A
     Blame it all on my roots
       Bbdim
@@ -419,17 +414,18 @@ function New-GuidFormat {
               A
     I was the last one you thought you'd see there
 
-    Get-Content .\song.txt | Convert-UltimateGuitarToChopro
+    Convert-UltimateGuitarToChopro
 #>
 function Convert-UltimateGuitarToChopro {
     [CmdletBinding()]
     param(
-        [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName, Position = 0)]
-        [AllowEmptyString()]
-        [string]$InputObject
+        #     [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName, Position = 0)]
+        #     [AllowEmptyString()]
+        #     [string]$InputObject
     )
 
     begin {
+        $InputObject = Get-Clipboard -Raw
         $content = New-Object System.Collections.Generic.List[string]
     }
 
@@ -472,11 +468,13 @@ function Convert-UltimateGuitarToChopro {
             foreach ($entry in ($chordIndex.GetEnumerator() | Sort-Object { [int]$_.Name } -Descending)) {
                 Write-Verbose "Inserting chord $($entry.Value) at position $($entry.Name)"
                 $pos = [int]$entry.Name
-                $chord = "[$($entry.Value)] "
+                $chord = "[$($entry.Value)]"
                 if ($pos -ge $result.Length) {
+                    # Add chord to end of line
                     $result = $result.PadRight($pos) + $chord
                 }
                 else {
+                    # Insert chord at the specified position
                     $result = $result.Insert($pos, $chord)
                 }
             }
@@ -493,10 +491,10 @@ function Convert-ChordProToPdf {
         [Alias('FullName', 'Path')]
         [string]$File,
 
-        #  chordii, modern1, modern2, modern3, dark, nashville
+        # chordii, modern1, modern2, modern3, dark, nashville
         # keyboard, ukulele
         # inline, lyricsonly, musejazz
-        [string]$Style = 'modern3'
+        [string]$Style = 'modern2'
     )
 
     begin {
@@ -515,10 +513,10 @@ function Convert-ChordProToPdf {
 
         chordpro.exe `
             --config="$Style" `
-            --2-up `
             --no-csv `
             --strict `
             --no-chord-grids `
+            --page-size=letter `
             --output="$itemName.pdf" `
             $resolvedItem
     }
