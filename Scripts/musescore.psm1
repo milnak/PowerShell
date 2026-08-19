@@ -108,5 +108,43 @@ function ConvertFrom-MuseScore {
     }
 }
 
-Export-ModuleMember -Function ConvertFrom-MuseScore
+function Export-MuseScoreMetadata {
+    [CmdletBinding()]
+    param(
+        # Must be mscz file.
+        # Accept filenames from the pipeline
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName', 'Path')]
+        [string]$MuseScoreFilePath
+    )
+
+    begin {
+        Get-Command 'unzip.exe' -CommandType Application -ErrorAction Stop | Out-Null
+    }
+
+    process {
+        # Extract .mscx file to stdout
+        $leafBase = Split-Path -LeafBase $MuseScoreFilePath
+        $MuseScoreFileName = '{0}.mscx' -f $leafBase
+
+        Write-Verbose "Extracting $MuseScoreFileName from $MuseScoreFilePath"
+
+        $mscx = unzip.exe -p $MuseScoreFilePath $MuseScoreFileName
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Failed to extract $MuseScoreFileName from $MuseScoreFilePath"
+            return
+        }
+        $score = ([xml]$mscx).museScore.Score
+
+        # arranger, composer, copyright, creationDate, lyricist, subtitle, ./..
+        # $score.metaTag
+
+        # I put version number in the subtitle
+        $title = ($score.Staff[0].VBox.Text | Where-Object style -eq 'title').Text
+        $subtitle = ($score.Staff[0].VBox.Text | Where-Object style -eq 'subtitle').Text
+        '{0} - {1}' -f $title, $subtitle
+    }
+}
+
+Export-ModuleMember -Function ConvertFrom-MuseScore, Export-MuseScoreMetadata
 

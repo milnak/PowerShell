@@ -144,6 +144,7 @@ function Get-JJazzLabMeta {
     Directory where the archive will be created (default: current folder).
 #>
 function Invoke-7zBackup {
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         # Root of path to back up recursively, e.g. 'F:\'
         [Parameter(Mandatory)][string]$SourcePath,
@@ -153,7 +154,8 @@ function Invoke-7zBackup {
 
     Get-Command '7z.exe' -CommandType Application -ErrorAction Stop | Out-Null
 
-    $filename = 'Backup {0}' -f (Get-Date -Format '(yyyy-dd-mm)')
+    $fileNames = Join-Path $SourcePath '*'
+    $archiveName = Join-Path $DestinationPath (Get-Date -Format 'yyyy-MM-dd')
 
     $arguments = @(
         'a',
@@ -172,12 +174,13 @@ function Invoke-7zBackup {
         '-x!"$WINDOWS.~BT"',
         # -r[-|0] : Recurse subdirectories for name search
         '-r',
-        # <archive_name>
-        ('"{ 0 }"' -f (Join-Path $DestinationPath $filename)),
+        # <archive_name> (quoted)
+        '`"$archiveName `"'
         # <file_names>
-        (Join-Path $SourcePath '*')
+        $fileNames
     )
 
+    # Start-Process handles WhatIf/Confirm automatically.
     Start-Process -FilePath '7z.exe' -ArgumentList $arguments -NoNewWindow -Wait
 }
 
@@ -483,6 +486,21 @@ function Convert-UltimateGuitarToChopro {
     }
 }
 
+<#
+.SYNOPSIS
+    Convert ChordPro files to PDF.
+.DESCRIPTION
+    Runs chordpro.exe for each input file and writes a PDF in the current
+    directory using the selected ChordPro configuration style.
+.PARAMETER File
+    Path to a ChordPro file. Accepts paths and FileInfo objects from the pipeline.
+.PARAMETER Style
+    ChordPro configuration style to use. The default is modern2.
+.PARAMETER NoChords
+    Generate lyrics-only output by passing --lyrics-only to chordpro.exe.
+.EXAMPLE
+    Get-ChildItem '*.cho' | Convert-ChordProToPdf -Style modern3 -NoChords -Verbose
+#>
 function Convert-ChordProToPdf {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -491,10 +509,12 @@ function Convert-ChordProToPdf {
         [Alias('FullName', 'Path')]
         [string]$File,
 
-        # chordii, modern1, modern2, modern3, dark, nashville
-        # keyboard, ukulele
-        # inline, lyricsonly, musejazz
-        [string]$Style = 'modern2'
+        # Style to apply
+        [ValidateSet('chordii', 'modern1', 'modern2', 'modern3', 'dark', 'nashville', 'keyboard', 'ukulele', 'inline', 'lyricsonly', 'musejazz')]
+        [string]$Style = 'modern2',
+
+        # Do not include chords in output
+        [switch]$NoChords
     )
 
     begin {
@@ -511,14 +531,22 @@ function Convert-ChordProToPdf {
 
         $itemName = Split-Path -Path $File -Leaf | Split-Path -LeafBase
 
-        chordpro.exe `
-            --config="$Style" `
-            --no-csv `
-            --strict `
-            --no-chord-grids `
-            --page-size=letter `
-            --output="$itemName.pdf" `
-            $resolvedItem
+        # --meta=KEY=VALUE
+        $arguments = @(
+            "--config=$Style"
+            '--no-a2crd'
+            '--no-csv'
+            '--strict'
+            '--diagrams=none'
+            '--page-size=letter'
+            "--output=$itemName.pdf"
+        )
+        if ($NoChords) {
+            $arguments += '--lyrics-only'
+        }
+        $arguments += $resolvedItem.Path
+
+        chordpro.exe @arguments
     }
 
     end {

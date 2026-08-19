@@ -39,7 +39,7 @@ function Invoke-Normalize {
     }
 
     process {
-        $resolveditem = Resolve-Path -LiteralPath $File -ErrorAction Stop
+        $resolveditem = 7
         $itemname = Split-Path -Path $File -Leaf | Split-Path -LeafBase
         $itemextension = Split-Path -Path $File -Leaf | Split-Path -Extension
         Write-Verbose "Resolved item: $resolveditem"
@@ -550,5 +550,62 @@ function ConvertTo-MultitrackOgg {
     }
 }
 
-Export-ModuleMember -Function Invoke-Normalize, Convert-MediaInfoToHtml, ConvertTo-Mp3, ConvertTo-MultitrackOgg
+# Merge UVR5 split stems into single file, with reduced vocal file volume.
+function Convert-KaraokeToMp3 {
+    param(
+        # Vocal file, split using UVR5
+        [parameter(Mandatory)]
+        [string]$VocalsFile,
 
+        # Instrumental file, split using UVR5
+        [parameter(Mandatory)]
+        [string]$InstrumentalFile,
+
+        # File to write to
+        [string]$OutputFile = 'karaoke-merged.mp3',
+
+        # Force overwrite of output file if it exists
+        [switch]$Force
+    )
+
+    # Ensure ffmpeg is available before processing any files
+    Get-Command -Name 'ffmpeg.exe' -CommandType Application -ErrorAction Stop | Out-Null
+
+    $ffmpeg_args = @()
+    if ($Force) {
+        # overwrite output files
+        $ffmpeg_args += '-y'
+    }
+    $ffmpeg_args += @(
+        # Don't show banner
+        '-hide_banner',
+        # Show panic,fatal,error,warning only
+        '-v', 'warning',
+        # disable console itneraction
+        '-nostdin',
+        # Input files
+        '-i', $VocalsFile,
+        '-i', $InstrumentalFile,
+        # apply specified filters
+        '-filter_complex', '[0:a]volume=0.2[a1];[a1][1:a]amix=inputs=2:normalize=0[out]',
+        # set mapping
+        '-map', '[out]',
+        # Output file
+        $OutputFile
+    )
+
+    & ffmpeg.exe @ffmpeg_args
+    if ($LASTEXITCODE -eq 0) {
+        Write-Output "Created '$OutputFile'."
+    }
+    else {
+        Write-Warning "ffmpeg exited with code $LASTEXITCODE"
+    }
+}
+
+Export-ModuleMember -Function `
+    Invoke-Normalize, `
+    Convert-MediaInfoToHtml, `
+    ConvertTo-Mp3, `
+    ConvertTo-MultitrackOgg, `
+    Convert-KaraokeToMp3

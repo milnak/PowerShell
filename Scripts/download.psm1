@@ -258,7 +258,7 @@ function Get-WebPageBinaries {
         # Uri of page to download from.
         [Parameter(Mandatory)] [uri]$Uri,
         # Extensions to download
-        [string[]]$Extensions = @('htm', 'html', 'zip', 'pdf', 'mp3', 'mid'),
+        [string[]]$Extensions = @('htm', 'html', 'zip', 'pdf', 'mp3', 'mid', 'txt', 'jpg', 'png', 'gif', 'exe', 'dll', 'msi', 'iso'),
         # Maximum recursion depth, 0=infinite
         [int]$Depth = 1
     )
