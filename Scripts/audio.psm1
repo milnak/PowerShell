@@ -39,7 +39,7 @@ function Invoke-Normalize {
     }
 
     process {
-        $resolveditem = 7
+        $resolveditem = Resolve-Path -LiteralPath $File -ErrorAction Stop
         $itemname = Split-Path -Path $File -Leaf | Split-Path -LeafBase
         $itemextension = Split-Path -Path $File -Leaf | Split-Path -Extension
         Write-Verbose "Resolved item: $resolveditem"
@@ -551,7 +551,7 @@ function ConvertTo-MultitrackOgg {
 }
 
 # Merge UVR5 split stems into single file, with reduced vocal file volume.
-function Convert-KaraokeToMp3 {
+function Convert-StemsToMp3 {
     param(
         # Vocal file, split using UVR5
         [parameter(Mandatory)]
@@ -562,7 +562,7 @@ function Convert-KaraokeToMp3 {
         [string]$InstrumentalFile,
 
         # File to write to
-        [string]$OutputFile = 'karaoke-merged.mp3',
+        [string]$OutputFile = 'stems-merged.mp3',
 
         # Force overwrite of output file if it exists
         [switch]$Force
@@ -599,7 +599,7 @@ function Convert-KaraokeToMp3 {
         Write-Output "Created '$OutputFile'."
     }
     else {
-        Write-Warning "ffmpeg exited with code $LASTEXITCODE"
+        Write-Host -ForegroundColor Red "ffmpeg exited with code $LASTEXITCODE"
     }
 }
 
@@ -608,4 +608,4 @@ Export-ModuleMember -Function `
     Convert-MediaInfoToHtml, `
     ConvertTo-Mp3, `
     ConvertTo-MultitrackOgg, `
-    Convert-KaraokeToMp3
+    Convert-StemsToMp3
