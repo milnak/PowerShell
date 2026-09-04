@@ -84,5 +84,5 @@ function Invoke-Code {
     }
 }
 
-Export-ModuleMember -Function Invoke-Code
-
+Export-ModuleMember -Function `
+    Invoke-Code

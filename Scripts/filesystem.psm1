@@ -1,9 +1,28 @@
 <#
 .SYNOPSIS
+    Create a directory and change into it.
+.DESCRIPTION
+    Ensures the specified directory exists (creating it if necessary) and
+    then pushes the location stack to that path.
+.PARAMETER Path
+    Directory path to create and enter.
+#>
+function New-FolderAndSetLocation {
+    [CmdletBinding()]
+    Param([Parameter(Mandatory)][string]$Path)
+
+    if (New-Item -Path $Path -ItemType Directory -Force) {
+        Push-Location -LiteralPath $Path
+    }
+}
+
+
+<#
+.SYNOPSIS
 Creates a temporary folder and cds into it.
 Outputs the path to allow for assigning to a variable.
 #>
-function mdcdtemp {
+function New-TempFolderAndSetLocation {
     [CmdletBinding()]
     $tempPath = [IO.Path]::Combine([IO.Path]::GetTempPath(), [IO.Path]::GetRandomFileName())
     New-Item -Path $tempPath -ItemType Directory -Force | Out-Null
@@ -55,7 +74,7 @@ Removes a folder recursively.
 .DESCRIPTION
 Force removes a folder recursively, prompting first.
 #>
-function rmrf {
+function Remove-FolderRecursive {
     param([Parameter(Mandatory = $true)] [string]$Path)
 
     if (Test-Path -LiteralPath $Path -PathType Container) {
@@ -76,7 +95,7 @@ Recursive file find.
 .DESCRIPTION
 By default will return all files starting in current folder tree.
 #>
-function rff {
+function Invoke-RecursiveFileFind {
     [CmdletBinding()]
     param(
         [Parameter(Position = 0)] [ValidateNotNullOrEmpty()] [string]$Filter = '*',
@@ -93,7 +112,7 @@ Recursive Grep
 .DESCRIPTION
 By default will start in current folder
 #>
-function rgrep {
+function Invoke-RecursiveGrep {
     [CmdletBinding()]
     param(
         [Parameter(Position = 0, Mandatory = $true)] [ValidateNotNullOrEmpty()] [string]$Pattern,
@@ -301,10 +320,10 @@ function Get-ChildItemTree {
         $dash = '-'
     }
     else {
-    $pipe = [char]0x2502    # │
-    $tee = [char]0x251C     # ├
-    $elbow = [char]0x2514   # └
-    $dash = [char]0x2500    # ─
+        $pipe = [char]0x2502    # │
+        $tee = [char]0x251C     # ├
+        $elbow = [char]0x2514   # └
+        $dash = [char]0x2500    # ─
     }
 
     function Show-TreeDir {
@@ -356,11 +375,33 @@ function Get-ChildItemTree {
     Show-TreeDir -Dir $root
 }
 
+Set-Alias -Name mdcd -Value New-FolderAndSetLocation
+Set-Alias -Name mdcdtemp -Value New-TempFolderAndSetLocation
+Set-Alias -Name rff -Value Invoke-RecursiveFileFind
+Set-Alias -Name rgrep -Value Invoke-RecursiveGrep
+Set-Alias -Name rmrf -Value Remove-FolderRecursive
 Set-Alias -Name tree -Value Get-ChildItemTree
 
 Export-ModuleMember -Function `
-    mdcdtemp, Remove-ItemToRecycleBin, rmrf, rff, rgrep, `
-    Get-FileSha256Hash, Get-FileHashBase64, Invoke-DU, `
-    Set-SelfOwnership, Get-DiskUsage, Get-ChildItemTree `
-    -Alias tree
+    Get-ChildItemTree, `
+    Get-DiskUsage, `
+    Get-FileHashBase64, `
+    Get-FileSha256Hash, `
+    Invoke-DU, `
+    Invoke-RecursiveFileFind, `
+    Invoke-RecursiveGrep, `
+    New-FolderAndSetLocation, `
+    New-TempFolderAndSetLocation, `
+    Remove-FolderRecursive, `
+    Remove-ItemToRecycleBin, `
+    Set-SelfOwnership, `
+    Show-TreeDir
+
+Export-ModuleMember -Alias `
+    mdcd, `
+    mdcdtemp, `
+    rff, `
+    rgrep, `
+    rmrf, `
+    tree
 

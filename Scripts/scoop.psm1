@@ -89,5 +89,7 @@ function Invoke-ScoopListInfoMarkdown {
 
 }
 
-Export-ModuleMember -Function Invoke-ScoopUpdate, Invoke-ScoopListInfo, Invoke-ScoopListInfoMarkdown
-
+Export-ModuleMember -Function `
+    Invoke-ScoopListInfo, `
+    Invoke-ScoopListInfoMarkdown, `
+    Invoke-ScoopUpdate

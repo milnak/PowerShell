@@ -30,25 +30,6 @@ function Write-BoxedMessage {
 
 <#
 .SYNOPSIS
-    Create a directory and change into it.
-.DESCRIPTION
-    Ensures the specified directory exists (creating it if necessary) and
-    then pushes the location stack to that path.
-.PARAMETER Path
-    Directory path to create and enter.
-#>
-function mdcd {
-    [CmdletBinding()]
-    Param([Parameter(Mandatory)][string]$Path)
-
-    if (New-Item -Path $Path -ItemType Directory -Force) {
-        Push-Location -LiteralPath $Path
-    }
-}
-
-
-<#
-.SYNOPSIS
     Generate ASCII art text with figlet and prefix lines with comments.
 .DESCRIPTION
     Uses the external figlet program to render input strings as ASCII art
@@ -259,5 +240,8 @@ function Get-ContentWithRainbow {
     }
 }
 
-Export-ModuleMember -Function Write-BoxedMessage, mdcd, Write-Figlet, Write-Bold, Get-ContentWithRainbow
-
+Export-ModuleMember -Function `
+    Get-ContentWithRainbow, `
+    Write-Bold, `
+    Write-BoxedMessage, `
+    Write-Figlet

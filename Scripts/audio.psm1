@@ -604,8 +604,8 @@ function Convert-StemsToMp3 {
 }
 
 Export-ModuleMember -Function `
-    Invoke-Normalize, `
     Convert-MediaInfoToHtml, `
+    Convert-StemsToMp3, `
     ConvertTo-Mp3, `
     ConvertTo-MultitrackOgg, `
-    Convert-StemsToMp3
+    Invoke-Normalize

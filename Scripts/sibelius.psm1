@@ -119,5 +119,6 @@ function Get-SibeliusFileVersion {
     }
 }
 
-Export-ModuleMember -Function Get-SibeliusFileVersion
+Export-ModuleMember -Function `
+    Get-SibeliusFileVersion
 

@@ -53,7 +53,7 @@ function Get-UninstallPath {
 .PARAMETER Path
     The path to add or remove.
 #>
-function Path {
+function Get-Path {
     param(
         [Parameter(ParameterSetName = 'List')]
         [switch]$List,
@@ -155,5 +155,13 @@ function Get-SystemInfo {
     }
 }
 
-Export-ModuleMember -Function Invoke-notepad, Get-UninstallPath, Path, Get-SystemInfo
+Set-Alias -Name path -Value Get-Path
 
+Export-ModuleMember -Function `
+    Get-Path, `
+    Get-SystemInfo, `
+    Get-UninstallPath, `
+    Invoke-notepad
+
+Export-ModuleMember -Alias `
+    path

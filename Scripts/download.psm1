@@ -292,9 +292,9 @@ function Get-WebPageBinaries {
 .PARAMETER Folder
     Destination directory where the MSI will be saved. Must already exist.
 .EXAMPLE
-    DownloadLatestPS -Folder 'C:\Downloads'
+    Invoke-DownloadLatestPS -Folder 'C:\Downloads'
 #>
-function DownloadLatestPS {
+function Invoke-DownloadLatestPS {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)] [string]$Folder)
 
@@ -395,7 +395,6 @@ function Invoke-YtDlpSubtitles {
     )
 
     begin {
-        Write-Verbose '[begin]'
         # Ensure yt-dlp is available before processing any files
         Get-Command -Name 'yt-dlp.exe' -CommandType Application -ErrorAction Stop | Out-Null
 
@@ -404,8 +403,6 @@ function Invoke-YtDlpSubtitles {
     }
 
     process {
-        Write-Verbose '[process]'
-
         Write-Verbose "Fetching video information for URI: $Uri"
         $output = & yt-dlp.exe --quiet --dump-json --skip-download --no-warnings --playlist-items 1:1 $Uri 2>&1
         if ($LASTEXITCODE -ne 0) {
@@ -417,7 +414,7 @@ function Invoke-YtDlpSubtitles {
         $json = $output | ConvertFrom-Json
         $title = $json.title
 
-        Write-Host "Processing video: $title"
+        Write-Verbose "Processing video: $title"
 
         # Passing 'output.%(ext)s' to yt-dlp will result in the subtitle file being named 'output.en.srt'
         Write-Verbose 'Downloading subtitles'
@@ -446,20 +443,24 @@ function Invoke-YtDlpSubtitles {
         }
 
         # Make title into a DOS friendly filename
-        $safeFilename = [regex]::Replace($title, ('[{0}]' -f [regex]::Escape( -join ([IO.Path]::GetInvalidFileNameChars()))), '_')
-
-        Write-Verbose "Writing transcript: $safeFilename"
-        $result -join ' ' | Out-File -FilePath "$safeFilename.txt" -Encoding UTF8
+        # $safeFilename = [regex]::Replace($title, ('[{0}]' -f [regex]::Escape( -join ([IO.Path]::GetInvalidFileNameChars()))), '_')
+        # Write-Verbose "Writing transcript: $safeFilename"
+        # $result -join ' ' | Out-File -FilePath "$safeFilename.txt" -Encoding UTF8
+        $result -join ' '
 
         Write-Verbose "Removing temporary subtitle file: $srtFile"
         Remove-Item -LiteralPath $srtFile
     }
 
     end {
-        Write-Verbose '[end]'
     }
 }
 
 Export-ModuleMember -Function `
-    Invoke-YtDlp, Invoke-Aria, Get-WebPage, Get-WebPageBinaries, DownloadLatestPS, Update-PowerShell, Invoke-YtDlpSubtitles
-
+    Get-WebPage, `
+    Get-WebPageBinaries, `
+    Invoke-Aria, `
+    Invoke-DownloadLatestPS, `
+    Invoke-YtDlp, `
+    Invoke-YtDlpSubtitles, `
+    Update-PowerShell

@@ -146,5 +146,6 @@ function Export-MuseScoreMetadata {
     }
 }
 
-Export-ModuleMember -Function ConvertFrom-MuseScore, Export-MuseScoreMetadata
-
+Export-ModuleMember -Function `
+    ConvertFrom-MuseScore, `
+    Export-MuseScoreMetadata

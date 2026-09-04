@@ -190,5 +190,7 @@ function Invoke-FixXsc {
     }
 }
 
-Export-ModuleMember -Function Read-Xsc, Write-Xsc, Invoke-FixXsc
-
+Export-ModuleMember -Function `
+    Invoke-FixXsc, `
+    Read-Xsc, `
+    Write-Xsc

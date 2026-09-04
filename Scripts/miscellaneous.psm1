@@ -86,7 +86,7 @@ function Show-ColorTable {
 .PARAMETER Hostname
     Remote host address or name.
 #>
-function rsync {
+function Invoke-RSync {
     param(
         [Parameter(Mandatory = $True)] [string]$Source,
         [Parameter(Mandatory = $True)] [string]$Destination,
@@ -546,6 +546,7 @@ function Convert-ChordProToPdf {
         }
         $arguments += $resolvedItem.Path
 
+        Write-Verbose "Running chordpro.exe with arguments: $($arguments -join ' ')"
         chordpro.exe @arguments
     }
 
@@ -623,7 +624,15 @@ function Invoke-MobileSheetsBackup {
 }
 
 Export-ModuleMember -Function `
-    Show-ColorTable, rsync, Get-JJazzLabMeta, Invoke-7zBackup, Update-IpFilter, `
-    Format-PowerShell, Convert-SafeLink, Push-ProfileLocation, New-GuidFormat, `
-    Convert-UltimateGuitarToChopro, Convert-ChordProToPdf, Invoke-MobileSheetsBackup
-
+    Convert-ChordProToPdf, `
+    Convert-SafeLink, `
+    Convert-UltimateGuitarToChopro, `
+    Format-PowerShell, `
+    Get-JJazzLabMeta, `
+    Invoke-7zBackup, `
+    Invoke-MobileSheetsBackup, `
+    Invoke-RSync, `
+    New-GuidFormat, `
+    Push-ProfileLocation, `
+    Show-ColorTable, `
+    Update-IpFilter

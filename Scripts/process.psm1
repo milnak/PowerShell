@@ -98,4 +98,6 @@ function Get-ProcessWorkingSet {
     }
 }
 
-Export-ModuleMember -Function Invoke-Kill, Get-ProcessWorkingSet
+Export-ModuleMember -Function `
+    Get-ProcessWorkingSet, `
+    Invoke-Kill

@@ -152,5 +152,8 @@ function Get-PdfBookmarks {
     }
 }
 
-Export-ModuleMember -Function Invoke-PdfSplitPages, Invoke-PdfDecrypt, Invoke-PdfMerge, Get-PdfBookmarks
-
+Export-ModuleMember -Function `
+    Get-PdfBookmarks, `
+    Invoke-PdfDecrypt, `
+    Invoke-PdfMerge, `
+    Invoke-PdfSplitPages

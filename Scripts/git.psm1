@@ -29,7 +29,7 @@ function Invoke-GitRepo {
 .SYNOPSIS
 Backup modified git files
 #>
-function gitbackup {
+function Invoke-GitBackup {
     [CmdletBinding(SupportsShouldProcess)]
     Param([Parameter(mandatory = $true, position = 0)][string]$Destination)
 
@@ -295,6 +295,12 @@ function Invoke-GitCommitAI {
 }
 
 Export-ModuleMember -Function `
-    Invoke-GitRepo, gitbackup, Get-GitGrepBlame, Get-GitConfig, Format-GitConfig, `
-    Invoke-GitDownHelper, Invoke-GitDown, Invoke-GitBranchDiff, Invoke-GitCommitAI
-
+    Format-GitConfig, `
+    Get-GitConfig, `
+    Get-GitGrepBlame, `
+    Invoke-GitBackup, `
+    Invoke-GitBranchDiff, `
+    Invoke-GitCommitAI, `
+    Invoke-GitDown, `
+    Invoke-GitDownHelper, `
+    Invoke-GitRepo
