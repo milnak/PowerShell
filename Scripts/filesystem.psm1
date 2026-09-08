@@ -375,10 +375,334 @@ function Get-ChildItemTree {
     Show-TreeDir -Dir $root
 }
 
+<#
+.DESCRIPTION
+    Copies files from a source directory to a destination directory using robocopy.
+    Creates the destination directory if it does not exist.
+    Writes a log file to the destination directory.
+    This function is a wrapper around robocopy.exe.
+
+.EXAMPLE
+    Invoke-RobocopyBackup -Source $env:USERPROFILE -Destination 'f:\PCBackup\UserProfile'
+
+#>
+function Invoke-RobocopyBackup {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Source,
+
+        [Parameter(Mandatory)]
+        [string]$Destination,
+
+        [switch]$WhatIf
+    )
+
+    if (-not (Test-Path -LiteralPath $Source)) {
+        throw "Cannot find source `"$Source`""
+    }
+
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+
+    # $logFile = Join-Path -Path $Destination -ChildPath ('Backup-{0:yyyy-MM-dd_HH-mm-ss}.log' -f (Get-Date))
+    $logFile = Join-Path -Path $env:TEMP -ChildPath ('Backup-{0:yyyy-MM-dd_HH-mm-ss}.log' -f (Get-Date))
+
+    $copyOptions = @(
+        # copy Subdirectories, but not empty ones.
+        '/S'
+        # what to COPY for files (default is /COPY:DAT)
+        # '/COPY:DT'
+        # delete dest files/dirs that no longer exist in source.
+        '/PURGE'
+        # Do multi-threaded copies with n threads (default 8).
+        '/MT:2'
+    )
+
+    $excludeFiles = @(
+        '*.APPICON'
+        '*.APPINFO'
+        '*.CAB'
+        '*.DL_'
+        '*.DLL'
+        '*.DMG'
+        '*.DRK'
+        '*.EXE'
+        '*.FDD'
+        '*.HDD'
+        '*.HDS'
+        '*.ISO'
+        '*.ITHMB'
+        '*.LOG'
+        '*.MEM'
+        '*.MENUDATA'
+        '*.MSI'
+        '*.NVRAM'
+        '*.O'
+        '*.OST'
+        '*.PVA'
+        '*.PVI'
+        '*.PVM'
+        '*.PVS'
+        '*.QTCH'
+        '*.SPARSEIMAGE'
+        '*.SYS'
+        '*.VDI'
+        '*.VHD'
+        '*.VHDX'
+        '*.VMC'
+        '*.VMDK'
+        '*.VMEM'
+        '*.VMSD'
+        '*.VMSN'
+        '*.VMSS'
+        '*.VMX'
+        '*.VMXF'
+        '*.VO1'
+        '*.VO2'
+        '*.VSV'
+        '*.VUD'
+        '*.WAB~'
+        '*.WIM'
+        'DumpStack.log.tmp'
+        'DESKTOP.INI'
+        'NTUSER.DAT'
+    )
+
+    # Excluded directories do not exclude subfolders when full path is specified !!!
+
+    $excludeDirectories = @(
+        '.bzvol'
+        '$RECYCLE.BIN'
+        '$WINDOWS.~BT'
+        'Windows.~WS'
+        '386'
+        'MSOCACHE'
+        'OneDriveTemp'
+        'SYSTEM VOLUME INFORMATION'
+        # "${env:ProgramFiles(x86)}"
+        'Program Files (x86)'
+        # "$env:AppData"
+        'Roaming'
+        # "$env:LocalAppData"
+        'Local'
+        # ???
+        'LocalLow'
+        # "$env:ProgramData"
+        'ProgramData'
+        # "$env:ProgramFiles"
+        'Program Files'
+        # "$env:SYSTEMROOT"
+        # "$env:ProgramData\MICROSOFT\WINDOWS\APPREPOSITORY"
+        'Windows'
+        # "$env:USERPROFILE\.copilot"
+        '.copilot'
+        # "$env:USERPROFILE\.vscode"
+        '.vscode'
+        # "$env:USERPROFILE\.vscode-shared"
+        '.vscode-shared'
+        # '"$env:LocalAppData\PACKAGES"'
+        'Packages'
+        'Temp'
+    )
+
+    $fileSelectionOptions = @(
+        # eXclude Older files.
+        '/XO'
+        # eXclude symbolic links (for both files and directories) and Junction points.
+        '/XJ'
+        # assume FAT File Times (2-second granularity).
+        '/FFT'
+        # eXclude Files matching given names/paths/wildcards.
+        '/XF'
+        $excludeFiles
+        # eXclude Directories matching given names/paths.
+        '/XD'
+        $excludeDirectories
+    )
+
+    $retryOptions = @(
+        # number of Retries on failed copies: default 1 million.
+        '/R:0'
+        # Wait time between retries: default is 30 seconds.
+        '/W:0'
+    )
+
+    if ($WhatIf) {
+        # List only - don't copy, timestamp or delete any files.
+        $loggingOptions += '/L'
+    }
+    else {
+        $loggingOptions = @(
+            # No Size - don't log file sizes.
+            '/NS'
+            # No Progress - don't display percentage copied.
+            # '/NP'
+            # show Estimated Time of Arrival of copied files.
+            '/ETA'
+            # output status to LOG file.
+            "/LOG:$logFile"
+            # output to console window, as well as the log file.
+            '/TEE'
+        )
+    }
+
+    $robocopyArgs = $copyOptions + $fileSelectionOptions + $retryOptions + $loggingOptions
+
+    & robocopy.exe $source $destination @robocopyArgs
+    $robocopyExitCode = $LASTEXITCODE
+    # https://ss64.com/nt/robocopy-exit.html
+    if ($robocopyExitCode -eq 0) {
+        Write-Host -ForegroundColor Yellow 'No errors occurred, and no copying was done.'
+        Write-Host 'The source and destination directory trees are completely synchronized.'
+    }
+    else {
+        if ($robocopyExitCode -band 1) {
+            Write-Host -ForegroundColor Green 'One or more files were copied successfully (that is, new files have arrived).'
+        }
+
+        if ($robocopyExitCode -band 2) {
+            Write-Host -ForegroundColor Yellow 'Some Extra files or directories were detected. No files were copied.'
+            Write-Host 'Examine the output log for details.'
+        }
+
+        if ($robocopyExitCode -band 4) {
+            Write-Host -ForegroundColor Yellow 'Some Mismatched files or directories were detected.'
+            Write-Host 'Examine the output log. Housekeeping might be required.'
+        }
+
+        if ($robocopyExitCode -band 8) {
+            Write-Host -ForegroundColor Red 'Some files or directories could not be copied (copy errors occurred and the retry limit was exceeded).'
+            Write-Host 'Check these errors further.'
+        }
+
+        if ($robocopyExitCode -band 16) {
+            Write-Host -ForegroundColor Red 'Serious error. Robocopy did not copy any files.'
+            Write-Host 'Either a usage error or an error due to insufficient access privileges on the source or destination directories.'
+        }
+
+        Write-Host "Log file: $logFile"
+
+        & attrib.exe -h -s $destination
+    }
+
+}
+
+function Invoke-Robocopy {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Source,
+
+        [Parameter(Mandatory)]
+        [string]$Destination,
+
+        [switch]$WhatIf
+    )
+
+    if (-not (Test-Path -LiteralPath $Source)) {
+        throw "Cannot find source `"$Source`""
+    }
+
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+
+    $copyOptions = @(
+        # copy Subdirectories, but not empty ones.
+        '/S'
+        # Do multi-threaded copies with n threads (default 8).
+        '/MT:2'
+    )
+
+    # Excluded directories do not exclude subfolders when full path is specified !!!
+
+    $excludeDirectories = @(
+        '.bzvol'
+        '$RECYCLE.BIN'
+        'System Volume Information'
+    )
+
+    $fileSelectionOptions = @(
+        # eXclude Older files.
+        '/XO'
+        # eXclude symbolic links (for both files and directories) and Junction points.
+        '/XJ'
+        # assume FAT File Times (2-second granularity).
+        '/FFT'
+        # eXclude Directories matching given names/paths.
+        '/XD'
+        $excludeDirectories
+    )
+
+    $retryOptions = @(
+        # number of Retries on failed copies: default 1 million.
+        '/R:0'
+        # Wait time between retries: default is 30 seconds.
+        '/W:0'
+    )
+
+    $loggingOptions = @(
+    )
+
+    if ($WhatIf) {
+        # List only - don't copy, timestamp or delete any files.
+        $loggingOptions += '/L'
+    }
+    else {
+        $loggingOptions = @(
+            # No Size - don't log file sizes.
+            '/NS'
+            # No Progress - don't display percentage copied.
+            # '/NP'
+            # show Estimated Time of Arrival of copied files.
+            '/ETA'
+            # output to console window, as well as the log file.
+            '/TEE'
+        )
+    }
+
+    $robocopyArgs = $copyOptions + $fileSelectionOptions + $retryOptions + $loggingOptions
+
+    & robocopy.exe $source $destination @robocopyArgs
+    $robocopyExitCode = $LASTEXITCODE
+    # https://ss64.com/nt/robocopy-exit.html
+    if ($robocopyExitCode -eq 0) {
+        Write-Host -ForegroundColor Yellow 'No errors occurred, and no copying was done.'
+        Write-Host 'The source and destination directory trees are completely synchronized.'
+    }
+    else {
+        if ($robocopyExitCode -band 1) {
+            Write-Host -ForegroundColor Green 'One or more files were copied successfully (that is, new files have arrived).'
+        }
+
+        if ($robocopyExitCode -band 2) {
+            Write-Host -ForegroundColor Yellow 'Some Extra files or directories were detected. No files were copied.'
+            Write-Host 'Examine the output log for details.'
+        }
+
+        if ($robocopyExitCode -band 4) {
+            Write-Host -ForegroundColor Yellow 'Some Mismatched files or directories were detected.'
+            Write-Host 'Examine the output log. Housekeeping might be required.'
+        }
+
+        if ($robocopyExitCode -band 8) {
+            Write-Host -ForegroundColor Red 'Some files or directories could not be copied (copy errors occurred and the retry limit was exceeded).'
+            Write-Host 'Check these errors further.'
+        }
+
+        if ($robocopyExitCode -band 16) {
+            Write-Host -ForegroundColor Red 'Serious error. Robocopy did not copy any files.'
+            Write-Host 'Either a usage error or an error due to insufficient access privileges on the source or destination directories.'
+        }
+
+        Write-Host "Log file: $logFile"
+
+        & attrib.exe -h -s $destination
+    }
+
+}
+
 Set-Alias -Name mdcd -Value New-FolderAndSetLocation
 Set-Alias -Name mdcdtemp -Value New-TempFolderAndSetLocation
 Set-Alias -Name rff -Value Invoke-RecursiveFileFind
 Set-Alias -Name rgrep -Value Invoke-RecursiveGrep
+Set-Alias -Name rmr -Value Remove-ItemToRecycleBin
 Set-Alias -Name rmrf -Value Remove-FolderRecursive
 Set-Alias -Name tree -Value Get-ChildItemTree
 
@@ -390,6 +714,8 @@ Export-ModuleMember -Function `
     Invoke-DU, `
     Invoke-RecursiveFileFind, `
     Invoke-RecursiveGrep, `
+    Invoke-Robocopy, `
+    Invoke-RobocopyBackup, `
     New-FolderAndSetLocation, `
     New-TempFolderAndSetLocation, `
     Remove-FolderRecursive, `
