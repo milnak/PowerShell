@@ -292,6 +292,8 @@ function Invoke-GitCommitAI {
     }
 
     copilot.exe --allow-all --prompt 'Create a descriptive git commit message and call git commit. Do not add a co-author to the commit.'
+
+    git.exe log -1
 }
 
 Export-ModuleMember -Function `
