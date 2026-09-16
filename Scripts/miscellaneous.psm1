@@ -511,7 +511,7 @@ function Convert-ChordProToPdf {
 
         # Style to apply
         [ValidateSet('chordii', 'modern1', 'modern2', 'modern3', 'dark', 'nashville', 'keyboard', 'ukulele', 'inline', 'lyricsonly', 'musejazz')]
-        [string]$Style = 'modern2',
+        [string]$Style = 'modern3',
 
         # Do not include chords in output
         [switch]$NoChords

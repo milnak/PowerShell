@@ -1,3 +1,19 @@
+function Invoke-InvertPdfColors {
+    Param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $outName = [IO.Path]::GetFileNameWithoutExtension($Path) + '-inverted.pdf'
+
+    $gsPath = Get-Command -Name 'gs.exe' -ErrorAction Stop | Select-Object -ExpandProperty Source
+    & $gsPath -sDEVICE=pdfwrite -o $outName -dTransferFunctionInfo=/Apply -f $Path
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Ghostscript failed with exit code $LASTEXITCODE"
+    }
+}
+
+
 <#
 .SYNOPSIS
     Split a PDF into individual page files.
@@ -154,6 +170,7 @@ function Get-PdfBookmarks {
 
 Export-ModuleMember -Function `
     Get-PdfBookmarks, `
+    Invoke-InvertPdfColors, `
     Invoke-PdfDecrypt, `
     Invoke-PdfMerge, `
     Invoke-PdfSplitPages

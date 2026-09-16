@@ -59,8 +59,17 @@ function Invoke-ScoopUpdate {
 # .NOTES
 # This function is designed to be used with PowerShell 7 or later.
 function Invoke-ScoopListInfo {
+    # Suppress "scoop list" Write-Host output by overriding Write-Host
+    function global:Write-Host { }
+    try {
+        $list = scoop.ps1 list
+    }
+    finally {
+        Remove-Item function:Write-Host
+    }
+
     # "scoop info" is slow, so do it in parallel.
-    scoop.ps1 list | ForEach-Object -Parallel {
+    $list | ForEach-Object -Parallel {
         scoop.ps1 info "$($_.Source)/$($_.Name)"
     }
 }
@@ -69,11 +78,13 @@ function Invoke-ScoopListInfo {
 # Outputs Scoop package information as Markdown grouped by bucket.
 #
 # .EXAMPLE
-# Invoke-ScoopListInfoMarkdown | Out-File -FilePath ./scoop-listinfo.md -Encoding UTF8
+# Invoke-ScoopListInfoMarkdown | Out-File ./scoop-listinfo.md
 function Invoke-ScoopListInfoMarkdown {
     '# Scoop List'
     ''
-    Invoke-ScoopListInfo
+    "*Created on $(Get-Date -Format 'yyyy-MM-dd') using Invoke-ScoopListInfoMarkdown*"
+    ''
+    Invoke-ScoopListInfo `
     | Select-Object Source, Name, Version, Description, Website, @{Name = 'Updated'; Expression = { [DateTime]$_.'Updated at' } }
     | Sort-Object Source, Name
     | Group-Object Source
@@ -86,7 +97,6 @@ function Invoke-ScoopListInfoMarkdown {
         }
         ''
     }
-
 }
 
 Export-ModuleMember -Function `
