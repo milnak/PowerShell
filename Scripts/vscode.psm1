@@ -1,88 +1,82 @@
 <#
 .SYNOPSIS
-Launch vscode
-.DESCRIPTION
-Unlike code.cmd, this supports wildcards.
-.EXAMPLE
- Get-ChildItem *.txt | Invoke-Code -Confirm
- #>
-function Invoke-Code {
-    # TODO: Support multiple files on commandline, e.g. "Invoke-Code file1.txt file2.txt"
-
-    # Support -Confirm, -WhatIf
-    [CmdletBinding(SupportsShouldProcess)]
+Start editor.
+#>
+function Invoke-Editor {
+    [CmdletBinding(SupportsShouldProcess)] # Support -Confirm, -WhatIf
     param(
-        # Files to edit. Wildcards supported.
-        # Accept filenames from the pipeline
-        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
-        [Alias('FullName', 'Path')]
-        [string]$File,
-        # Whether to create a new VSCode instance.
-        [switch]$NewWindow,
-        # Command to launch code. Typically 'code.cmd'
-        [string]$CodeCommand = 'code.cmd'
+        [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName')]
+        [string[]]$Path,
+
+        # Editor command to use, e.g. 'code' or 'micro'.
+        [string]$EditorCommand = 'code.cmd'
     )
 
     begin {
-        Write-Verbose '[Invoke-Code] begin'
+        # Fail fast if editor command doesn't exist.
+        Get-Command -Name $EditorCommand -CommandType Application -ErrorAction Stop | Out-Null
 
-        # Fail fast if $CodeCommand can't be located.
-        Get-Command -Name $CodeCommand -CommandType Application -ErrorAction Stop | Out-Null
-
-        $codeArgs = @()
+        $files = [Collections.Generic.List[string]]::new()
     }
 
     process {
-        Write-Verbose '[Invoke-Code] process'
-
-        if ($File -match '[\*\?]') {
-            # 1. Wildcard provided: resolve and add all matches.
-            Write-Verbose "Resolving wildcard: $File"
-            Get-ChildItem -Path $File | Select-Object -ExpandProperty FullName | ForEach-Object {
-                if ($PSCmdlet.ShouldProcess($_, 'Edit with code')) {
-                    Write-Verbose "Adding file: $_"
-                    $codeArgs += $_
+        foreach ($item in $Path) {
+            if ([Management.Automation.WildcardPattern]::ContainsWildcardCharacters($item)) {
+                Write-Verbose "Wildcard detected: $item"
+                # Wildcard detected. Add resolved wildcard matches.
+                $resolvedPaths = Resolve-Path -Path $item -ErrorAction Stop
+                if ($resolvedPaths.Count -eq 0) {
+                    Write-Warning "No matches found for wildcard: $item"
                 }
-            }
-        }
-        else {
-            # 2. No wildcard. Attempt to resolve path.
-            $resolvedPath = Resolve-Path -LiteralPath $File -ErrorAction SilentlyContinue
-            if ($resolvedPath) {
-                # 2a. file exists: resolve and add. This allows for relative paths, e.g. "subdir\file.txt", to be added correctly.
-                if ($PSCmdlet.ShouldProcess($resolvedPath, 'Edit with code')) {
-                    $codeArgs += $resolvedPath
+                else {
+                    foreach ($resolvedPath in $resolvedPaths) {
+                        Write-Verbose "Resolved wildcard match: $resolvedPath"
+                        if ($PSCmdlet.ShouldProcess($File, "Edit with $EditorCommand")) {
+                            $files.Add($resolvedPath)
+                        }
+                    }
                 }
             }
             else {
-                # 2b. file doesn't exist: add as-is (let code handle the error).
-                if ($PSCmdlet.ShouldProcess($File, 'Edit with code')) {
-                    Write-Warning "Adding non-existent file: $File"
-                    $codeArgs += $File
+                # No wildcard detected. Resolve literal path if file found, otherwise pass path as-is.
+                $resolvedPath = Resolve-Path -LiteralPath $item -ErrorAction SilentlyContinue
+                if ($resolvedPath) {
+                    Write-Verbose "Resolved literal path: $($resolvedPath)"
+                    if ($PSCmdlet.ShouldProcess($File, "Edit with $EditorCommand")) {
+                        $files.Add($resolvedPath)
+                    }
+
+                }
+                else {
+                    # $file = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($item)
+                    Write-Verbose "Using unresolved path: $item"
+                    if ($PSCmdlet.ShouldProcess($File, "Edit with $EditorCommand")) {
+                        $files.Add($item)
+                    }
                 }
             }
         }
     }
 
     end {
-        Write-Verbose '[Invoke-Code] end'
-
-        if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('WhatIf')) {
-            # -WhatIf requires no additional processing.
+        if ($files.Count -eq 0) {
+            Write-Warning "No files to edit."
             return
         }
-
-        if ($codeArgs.Count -eq 0) {
-            return
+        if ($files.Count -ne 0 -and -not $WhatIfPreference) {
+            Write-Host "`nLaunching " -NoNewline -ForegroundColor DarkGray
+            Write-Host $EditorCommand -ForegroundColor Cyan
+            $files | ForEach-Object {
+                Write-Host ' > ' -NoNewline -ForegroundColor DarkCyan
+                Write-Host $_
+            }
+            Write-Host ''
+            & $EditorCommand @files
         }
-
-        if ($NewWindow) {
-            $codeArgs += '--new-window'
-        }
-        Write-Verbose "Launching $CodeCommand $codeArgs"
-        & $CodeCommand @codeArgs
     }
 }
 
+
 Export-ModuleMember -Function `
-    Invoke-Code
+    Invoke-Editor

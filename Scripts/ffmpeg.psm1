@@ -483,7 +483,7 @@ function ConvertTo-MultitrackOgg {
 
         Write-Verbose 'Begin'
 
-        $files = [System.Collections.Generic.List[string]]::new()
+        $files = [Collections.Generic.List[string]]::new()
     }
 
     process {
@@ -504,7 +504,7 @@ function ConvertTo-MultitrackOgg {
             return
         }
 
-        $ffmpegArgs = [System.Collections.Generic.List[string]]::new()
+        $ffmpegArgs = [Collections.Generic.List[string]]::new()
 
         # Keep ffmpeg quiet and non-interactive
         $ffmpegArgs.AddRange([string[]]('-loglevel', 'warning', '-hide_banner', '-nostats', '-nostdin'))
@@ -603,9 +603,76 @@ function Convert-StemsToMp3 {
     }
 }
 
+<#
+.SYNOPSIS
+Use ffmpeg to convert video files to GIF format.
+#>
+function ConvertTo-Gif {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        # Accept filenames from the pipeline
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName', 'Path')]
+        [string]$File,
+
+        [switch]$Force
+    )
+
+    begin {
+        Get-Command -Name 'ffmpeg.exe' -CommandType Application -ErrorAction Stop | Out-Null
+
+        Write-Verbose 'Begin'
+    }
+
+    process {
+        $path = (Resolve-Path -LiteralPath $File -ErrorAction Stop).Path
+        Write-Verbose "Adding '$path'"
+
+        $destination = "$($path).gif"
+
+        if (-not $PSCmdlet.ShouldProcess($destination, 'Convert to GIF')) {
+            return
+        }
+
+        $ffmpegArgs = [Collections.Generic.List[string]]::new()
+
+        # Keep ffmpeg quiet and non-interactive
+        $ffmpegArgs.AddRange([string[]]('-loglevel', 'warning', '-hide_banner', '-nostats', '-nostdin'))
+
+        if ($Force) {
+            $ffmpegArgs.Add('-y')
+        }
+
+        $ffmpegArgs.Add('-i')
+        $ffmpegArgs.Add($path)
+
+        $ffmpegArgs.Add('-vf')
+        $ffmpegArgs.Add('fps=10,scale=-1:240:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse')
+        $ffmpegArgs.Add('-loop')
+        $ffmpegArgs.Add('0')
+
+        $ffmpegArgs.Add($destination)
+
+        Write-Verbose ($ffmpegArgs -join ' ')
+
+        & ffmpeg.exe @ffmpegArgs
+        if ($LASTEXITCODE -eq 0) {
+            Write-Output "Created '$destination'."
+        }
+        else {
+            Write-Warning "ffmpeg exited with code $LASTEXITCODE"
+        }
+    }
+
+    end {
+        Write-Verbose 'End'
+    }
+}
+
 Export-ModuleMember -Function `
     Convert-MediaInfoToHtml, `
     Convert-StemsToMp3, `
+    ConvertTo-Gif,
     ConvertTo-Mp3, `
     ConvertTo-MultitrackOgg, `
     Invoke-Normalize

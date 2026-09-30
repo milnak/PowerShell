@@ -40,3 +40,5 @@ if ((Get-Command -Name 'zoxide.exe' -CommandType Application -ErrorAction Silent
     'Adding zoxide completion'
     Invoke-Expression -Command $(zoxide.exe init powershell | Out-String)
 }
+
+$env:RIPGREP_CONFIG_PATH = (Resolve-Path "~\.ripgreprc" -ErrorAction SilentlyContinue).Path
