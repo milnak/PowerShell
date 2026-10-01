@@ -71,20 +71,61 @@ function Remove-ItemToRecycleBin {
 <#
 .SYNOPSIS
 Removes a folder recursively.
+
 .DESCRIPTION
 Force removes a folder recursively, prompting first.
+
+.PARAMETER Path
+    Directory path to remove.
+.PARAMETER Recycle
+    Switch indicating whether to move the folder to the recycle bin instead of permanently deleting it.
 #>
 function Remove-FolderRecursive {
-    param([Parameter(Mandatory = $true)] [string]$Path)
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory)][string]$Path,
+        [switch]$Recycle
+    )
 
-    if (Test-Path -LiteralPath $Path -PathType Container) {
-        $response = Read-Host "Really remove '$PATH'? ('`e[1myes`e[0m' to confirm)"
-        if ($response -eq 'yes') {
-            Remove-Item -Force -Recurse -LiteralPath $Path
+    begin {
+        Write-Verbose '[begin] Remove-FolderRecursive'
+
+        if ($Recycle) {
+            $shell = New-Object -ComObject 'Shell.Application'
+        }
+
+        $directory = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+
+        if (-not $directory.PSIsContainer) {
+            throw "'$Path' is not a directory."
+        }
+
+        $root = [IO.Path]::GetPathRoot($directory.FullName)
+        if ($directory.FullName.TrimEnd('\') -eq $root.TrimEnd('\')) {
+            throw "Refusing to remove filesystem root '$($directory.FullName)'."
         }
     }
-    else {
-        Write-Warning "Path not found or not folder."
+
+    process {
+        Write-Verbose '[process] Remove-FolderRecursive: $Path'
+        Write-Host -NoNewline "Really remove '`e[37;1;3m$Path`e[0m'? ('yes' to confirm): "
+        if ((Read-Host) -eq 'yes') {
+            if ($Recycle) {
+                Write-Verbose "Recycling files in: $($directory.FullName)"
+                foreach ($file in (Get-ChildItem -LiteralPath $directory.FullName -Recurse -File)) {
+                    Write-Verbose "Recycling: $file"
+                    $directoryPath = Split-Path -Path $file -Parent
+                    $shell.Namespace($directoryPath).ParseName($file.Name).InvokeVerb('delete')
+                }
+            }
+
+            Write-Verbose "Removing: $($directory.FullName)"
+            Remove-Item -LiteralPath $directory.FullName -Recurse -Force -ErrorAction Stop
+        }
+    }
+
+    end {
+        Write-Verbose '[end] Remove-FolderRecursive'
     }
 }
 
