@@ -22,14 +22,19 @@ Set-PSReadlineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadlineKeyHandler -Key DownArrow -Function HistorySearchForward
 
 # Add Winget package paths to PATH
+
 $wingetPackagesPath = "$env:LocalAppData\Microsoft\Winget\Packages"
 "Adding Winget paths from $wingetPackagesPath"
 Get-ChildItem -LiteralPath $wingetPackagesPath -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue `
 | Group-Object DirectoryName `
 | ForEach-Object {
-    $exes = $_.Group | ForEach-Object { "`e[1m{0}`e[22m" -f (Split-Path -Leaf $_) }
-    '  {0}: {1}' -f [IO.Path]::GetRelativePath("$env:LocalAppData\Microsoft\Winget\Packages", $_.Name), ($exes -join ', ')
-    $env:Path += ";$($_.Name)"
+    $fullPath = $_.Name
+    # e.g. "zyedidia.micro_Microsoft.Winget.Source_8wekyb3d8bbwe" -> "zyedidia.micro"
+    $relativePath = [IO.Path]::GetRelativePath("$env:LocalAppData\Microsoft\Winget\Packages", $fullPath).Replace('_Microsoft.Winget.Source_8wekyb3d8bbwe', '')
+    Write-Host ("• `e[4m{0}`e[24m" -f $relativePath)
+    $exes = $_.Group | ForEach-Object { "`e[1m{0}`e[0m" -f (Split-Path -Leaf $_) }
+    Write-Host "  $($exes -join ', ')"
+    $env:Path += ";$fullPath"
 }
 
 # Set the prompt

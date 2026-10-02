@@ -550,7 +550,23 @@ function ConvertTo-MultitrackOgg {
     }
 }
 
-# Merge UVR5 split stems into single file, with reduced vocal file volume.
+<#
+.DESCRIPTION
+Merge UVR5 split stems into single file, with reduced vocal file volume.
+
+.PARAMETER VocalsFile
+The vocal file, split using UVR5.
+.PARAMETER InstrumentalFile
+The instrumental file, split using UVR5.
+.PARAMETER OutputFile
+The file to write the merged output to.
+.PARAMETER Force
+Force overwrite of the output file if it exists.
+
+.EXAMPLE
+Convert-StemsToMp3 -VocalsFile "vocals.wav" -InstrumentalFile "instrumental.wav" -OutputFile "merged.mp3"
+This command merges the specified vocal and instrumental files into a single MP3 file with reduced vocal volume.
+#>
 function Convert-StemsToMp3 {
     param(
         # Vocal file, split using UVR5
@@ -587,7 +603,7 @@ function Convert-StemsToMp3 {
         '-i', $VocalsFile,
         '-i', $InstrumentalFile,
         # apply specified filters
-        '-filter_complex', '[0:a]volume=0.2[a1];[a1][1:a]amix=inputs=2:normalize=0[out]',
+        '-filter_complex', '[0:a]volume=0.15[a1];[a1][1:a]amix=inputs=2:normalize=0[out]',
         # set mapping
         '-map', '[out]',
         # Output file
