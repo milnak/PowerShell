@@ -1,5 +1,33 @@
-# TODO: Use Get-MameListXmlLookup in Get-MameRomList and Get-MameRoms
+<#
+.SYNOPSIS
+Returns cached MAME machine metadata as XML.
 
+.DESCRIPTION
+Resolves the MAME executable and reads its version using -version. Loads
+previously exported XML from a version-specific CLIXML cache, or runs
+-listxml and caches the parsed XML when no cache exists.
+
+.PARAMETER MamePath
+Required path to the MAME executable.
+
+.INPUTS
+None. This function does not accept pipeline input.
+
+.OUTPUTS
+System.Xml.XmlDocument
+The MAME listxml document.
+
+.EXAMPLE
+# Display in "mame -listfull" format.
+$xml = Get-MameListXmlLookup -MamePath 'G:\MAME\mame.exe' -Verbose
+$xml.mame.machine | Select-Object name, description | ForEach-Object { '{0,-17} "{1}"' -f $_.name, $_.description }
+}
+
+.NOTES
+Cache files are stored in $env:TEMP as mame_listxml_<version>.clixml.
+The executable is required even when a cache exists. An invalid executable
+path or an unrecognized version causes return 1.
+#>
 function Get-MameListXmlLookup {
     [CmdletBinding()]
     param(
@@ -11,13 +39,13 @@ function Get-MameListXmlLookup {
     }
     catch {
         Write-Warning "Mame EXE not found at $MamePath"
-        exit 1
+        return 1
     }
     Write-Verbose "MAME path: $resolvedMamePath"
 
     if (-not (Test-Path -LiteralPath $resolvedMamePath -PathType Leaf)) {
         Write-Warning "Mame path is not a file: $resolvedMamePath"
-        exit 1
+        return 1
     }
 
     # Parse output of "mame.exe -listxml", with caching keyed by MAME version string.
@@ -28,7 +56,7 @@ function Get-MameListXmlLookup {
     }
     else {
         Write-Warning "Could not determine MAME version from '$resolvedMamePath'. Verify it is a valid MAME executable."
-        exit 1
+        return 1
     }
 
     Write-Verbose "MAME version: $mameVersion"
@@ -57,15 +85,28 @@ function Get-MameListXmlLookup {
 List installed MAME ROMs, suitable for filtering.
 
 .DESCRIPTION
-Parses a MAME "listxml" DAT file and correlates it with ROM ZIP files
-in a folder, returning objects with metadata suitable for filtering.
+Loads cached MAME "listxml" output and correlates it with ROM ZIP files
+directly in a folder, returning matching metadata objects. Supports modern
+machine entries and legacy game entries. Warns about unmatched ZIP files
+and drivers whose status is not good.
 
-Prerequisite: MAME DAT file from "mame.exe -listxml", e.g.
-advmame106.xml file from "MAME config files" at:
-https://MAME.github.io/docs/download.html
+.PARAMETER RomFolder
+Directory containing ROM ZIP files. Defaults to the roms directory under
+the current directory. Subdirectories are not searched.
+
+.PARAMETER MameExe
+Path to MAME executable. Defaults to ./mame.exe.
+
+.INPUTS
+None. This function does not accept pipeline input.
+
+.OUTPUTS
+System.Management.Automation.PSCustomObject
+Objects with Rom, CloneOf, RomOf, Description, Manufacturer, Buttons,
+Control, Players, Orientation, Resolution, Year, and Driver properties.
 
 .EXAMPLE
-$roms = Get-MameRoms -DatFile 'advmame106.xml' -RomFolder 'D:\roms'
+$roms = Get-MameRoms -MameExe 'F:\MAME\mame.exe' -RomFolder 'F:\mame\roms'
 
 $roms |
     Sort-Object Description |
@@ -75,7 +116,8 @@ $roms |
         Year, Rom
 
 .EXAMPLE
-Filter by runnable, cloneof empty, <=6 buttons, horizontal orientation, joystick control:
+Filter the previously loaded ROMs to non-clones with at most six buttons,
+horizontal orientation, and joystick or stick controls:
 
 $roms |
     Where-Object {
@@ -86,16 +128,24 @@ $roms |
     }
 
 .EXAMPLE
-List all required BIOS:
+List distinct ROM dependencies, including BIOS dependencies:
+
 $roms | Where-Object RomOf | Select-Object -Unique RomOf
 
 .EXAMPLE
 List ROMs requiring more than 5 buttons:
+
 $roms | Where-Object Buttons -gt 5 | Select-Object Rom,Buttons
 
 .EXAMPLE
-List clones:
+List clones
+
 $roms | Where-Object CloneOf -ne $null | Select-Object Rom,CloneOf
+
+.NOTES
+Uses Get-MameListXmlLookup and its version-specific XML cache in $env:TEMP.
+Modern machine entries with runnable="no" are excluded; legacy mame game
+entries must have runnable="yes". Clones and ROM dependencies are retained.
 #>
 function Get-MameRoms {
 
@@ -105,9 +155,8 @@ function Get-MameRoms {
         [Parameter(Mandatory = $false)]
         [string]$RomFolder = 'roms',
 
-        # MAME "listxml" file.
         [Parameter(Mandatory = $false)]
-        [string]$DatFile = 'advmame106.xml'
+        [string]$MameExe = './mame.exe'
     )
 
     if (-not (Test-Path -LiteralPath $RomFolder -PathType Container)) {
@@ -117,22 +166,25 @@ function Get-MameRoms {
 
     # Load XML
     try {
-        $advmame = [xml](Get-Content -LiteralPath $DatFile -ErrorAction Stop)
+        $advmame = Get-MameListXmlLookup -MamePath $MameExe
     }
     catch {
-        Write-Warning "Unable to read DAT file: $DatFile"
+        Write-Warning "Unable to load MAME XML from ${MameExe}: $_"
         return
     }
 
     # Determine XML structure
-    if ($advmame.mame.game) {
+    if ($advmame.mame.machine) {
+        $games = $advmame.mame.machine | Where-Object { $_.runnable -ne 'no' }
+    }
+    elseif ($advmame.mame.game) {
         $games = $advmame.mame.game | Where-Object { $_.runnable -eq 'yes' }
     }
     elseif ($advmame.datafile.game) {
         $games = $advmame.datafile.game
     }
     else {
-        Write-Warning "Unexpected XML format: $DatFile"
+        Write-Warning "Unexpected XML format from $MameExe"
         return
     }
 
@@ -145,11 +197,11 @@ function Get-MameRoms {
             RomOf        = $g.romof
             Description  = $g.Description
             Manufacturer = $g.Manufacturer
-            Buttons      = $g.input.buttons
-            Control      = $g.input.control
+            Buttons      = if ($g.display) { @($g.input.control)[0].buttons } else { $g.input.buttons }
+            Control      = if ($g.display) { @($g.input.control)[0].type } else { $g.input.control }
             Players      = $g.input.players
-            Orientation  = $g.video.orientation
-            Resolution   = '{0}x{1}' -f $g.video.width, $g.video.height
+            Orientation  = if ($g.display) { if (@($g.display)[0].rotate -in '90', '270') { 'vertical' } else { 'horizontal' } } else { $g.video.orientation }
+            Resolution   = if ($g.display) { '{0}x{1}' -f @($g.display)[0].width, @($g.display)[0].height } else { '{0}x{1}' -f $g.video.width, $g.video.height }
             Year         = $g.year
             Driver       = $g.driver
         }
@@ -183,17 +235,34 @@ Checks GitHub for the latest MAME release and updates the local installation.
 
 .DESCRIPTION
 Compares the local MAME version (from mame.exe -version) with the latest
-GitHub release. If a newer version exists, downloads the self‑extracting
-binary and extracts it using 7‑Zip.
+GitHub release tag. If the tags differ, downloads the latest Windows x64
+self-extracting binary and extracts it using 7-Zip. Prompts to install
+MAME if the executable is missing. Reports progress and results to the host.
 
 .PARAMETER Path
 Directory containing mame.exe. Defaults to the current directory.
+
+.INPUTS
+None. This function does not accept pipeline input.
+
+.OUTPUTS
+None. This function does not return objects.
 
 .EXAMPLE
 Invoke-MameUpdate
 
 .EXAMPLE
 Invoke-MameUpdate -Path 'D:\MAME' -Confirm
+
+.EXAMPLE
+Invoke-MameUpdate -Path 'D:\MAME' -WhatIf
+
+.NOTES
+Requires 7z.exe on PATH, internet access to GitHub, and write access to the
+installation directory and temporary folder. Supports -WhatIf and -Confirm
+for downloading and extracting the release; version checks and any initial
+installation prompt occur before ShouldProcess. Removes the downloaded
+installer after the extraction attempt.
 #>
 function Invoke-MameUpdate {
     [CmdletBinding(SupportsShouldProcess)]
@@ -228,7 +297,7 @@ function Invoke-MameUpdate {
     $localFriendly = $matches['friendly']
     $localVersion = $matches['version']
 
-    Write-Verbose "Local MAME version: $localFriendly ($localVersion)"
+    Write-Host "Local MAME version is $localFriendly ($localVersion)"
 
     # Query GitHub API
     $response = Invoke-RestMethod -Uri 'https://api.github.com/repos/mamedev/mame/releases/latest' -ErrorAction Stop
@@ -280,21 +349,33 @@ function Invoke-MameUpdate {
 
 <#
 .SYNOPSIS
-Returns a filtered list of runnable base MAME machines from mame.exe -listxml output.
+Returns a filtered list of runnable, non-clone MAME arcade candidates.
 
 .DESCRIPTION
-Runs mame.exe -listxml, filters to runnable non-clone/non-ROMOF machine entries,
-and emits objects containing core metadata (description, controls, players,
-orientation, resolution, year, and driver).
+Loads XML through Get-MameListXmlLookup and applies best-effort arcade
+filters. Excludes clones, BIOS entries, mechanical machines, devices,
+software-list machines, explicitly non-runnable entries, LCD/SVG displays,
+and entries lacking display or player/control information. Excludes entries
+whose first control is a keyboard, keypad, or gambling control. ROM
+dependencies and imperfect or preliminary drivers are allowed.
 
 .PARAMETER MameExe
 Path to MAME executable. Defaults to ./mame.exe.
+
+.INPUTS
+None. This function does not accept pipeline input.
+
+.OUTPUTS
+System.Management.Automation.PSCustomObject
+Objects with Rom, Description, Manufacturer, Year, Players, Control,
+Buttons, Resolution, and Rotate properties. Control and Buttons describe
+the first input control; Rotate is the display rotation in degrees.
 
 .EXAMPLE
 Get-MameRomList
 
 .EXAMPLE
-$m = Get-MameRomList -MameExe 'G:\MAME\mame.exe'
+$m = Get-MameRomList -MameExe 'F:\MAME\mame.exe'
 
 Get-Content 'D:\temp\Top 250 Greatest Arcade Games of All Time.txt' `
 | Where-Object { $_.Trim() -ne "" } `
@@ -312,25 +393,19 @@ Get-Content 'D:\temp\Top 250 Greatest Arcade Games of All Time.txt' `
 .EXAMPLE
 Get-MameRomList | Group-Object Control | Sort-Object -Descending Count
 
+.NOTES
+Uses a version-specific XML cache in $env:TEMP. Requires mame.machine XML
+entries. Warns when mameconfig is not 10 but continues processing.
 #>
 function Get-MameRomList {
     [CmdletBinding()]
     param([string]$MameExe = './mame.exe')
 
-    if (-not (Get-Command -Name $MameExe -CommandType Application -ErrorAction SilentlyContinue)) {
-        Write-Warning "MAME executable not found: $MameExe"
-        return
-    }
-
     try {
-        $mamexml = [xml](& $MameExe -listxml)
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "mame.exe -listxml exited with code $LASTEXITCODE."
-            return
-        }
+        $mamexml = Get-MameListXmlLookup -MamePath $MameExe
     }
     catch {
-        Write-Warning "Unable to parse $MameExe -listxml: $_"
+        Write-Warning "Unable to load MAME XML from ${MameExe}: $_"
         return
     }
 
@@ -381,19 +456,39 @@ function Get-MameRomList {
 
 <#
 .SYNOPSIS
-    Reads a mame "folder.ini" format file and displays contained names and sections with descriptions.
-.NOTES
-    Description will be empty if the name is not supported by the specified mame.exe
+Returns MAME folder.ini entries with their sections and descriptions.
 
-    "mame -listfull" output will be cached based on the MAME version, e.g. "mame_listfull_mame0287.clixml"
+.DESCRIPTION
+Parses section headings and machine names from a MAME folder.ini file.
+Looks up descriptions using cached mame.exe -listfull output and returns
+one object per entry. Ignores semicolon comments and FOLDER_SETTINGS entries.
+
+.PARAMETER IniPath
+Required path to the MAME folder.ini file.
+
+.PARAMETER MamePath
+Required path to the MAME executable used to look up descriptions.
+
+.INPUTS
+None. This function does not accept pipeline input.
+
+.OUTPUTS
+System.Management.Automation.PSCustomObject
+Objects with Name, Section, and Description properties.
 
 .EXAMPLE
-    .\Convert-MameIniToText.ps1 -Verbose `
-      -IniPath 'G:\mame\folders\TOP MAME ARCADE GAMES.ini' `
-      -MamePath G:\mame\mame.exe `
-      | Where-Object Section -eq 'ROOT_FOLDER' `
-      | Select-Object -Property @{Name='Entry'; Expression={"$($_.Description) [$($_.Name)]"}} `
-      | Sort-Object Entry
+Convert-MameIniToText -Verbose `
+    -IniPath 'G:\mame\folders\TOP MAME ARCADE GAMES.ini' `
+    -MamePath 'G:\mame\mame.exe' `
+    | Where-Object Section -eq 'ROOT_FOLDER' `
+    | Select-Object -Property @{Name='Entry'; Expression={"$($_.Description) [$($_.Name)]"}} `
+    | Sort-Object Entry
+
+.NOTES
+Description is empty when the specified MAME version does not recognize a
+name. Cache files are stored in $env:TEMP as mame_listfull_<version>.clixml.
+An unresolved INI path, an invalid executable path, or an unrecognized MAME
+version causes return 1.
 #>
 function Convert-MameIniToText {
     [CmdletBinding()]
@@ -402,6 +497,32 @@ function Convert-MameIniToText {
         [Parameter(Mandatory)][string]$MamePath
     )
 
+    <#
+    .SYNOPSIS
+    Returns section and machine-name entries from a MAME folder.ini file.
+
+    .DESCRIPTION
+    Tracks bracketed section headings and reads the leading word characters
+    from entry lines. Ignores semicolon comments, blank lines, and entries
+    in the FOLDER_SETTINGS section. Entries before any heading have an empty
+    Section value.
+
+    .PARAMETER FilePath
+    Required path to the INI file to parse.
+
+    .INPUTS
+    None. This function does not accept pipeline input.
+
+    .OUTPUTS
+    System.Management.Automation.PSCustomObject
+    Objects with Section and Name properties.
+
+    .EXAMPLE
+    Get-IniContent -FilePath 'G:\mame\folders\favorites.ini'
+
+    .NOTES
+    Internal helper available only within Convert-MameIniToText.
+    #>
     function Get-IniContent {
         [CmdletBinding()]
         Param(
@@ -431,6 +552,35 @@ function Convert-MameIniToText {
         }
     }
 
+    <#
+    .SYNOPSIS
+    Returns a cached lookup of MAME machine names to descriptions.
+
+    .DESCRIPTION
+    Resolves the executable and reads its version using -version. Imports
+    a version-specific CLIXML cache if present; otherwise runs -listfull,
+    parses machine names and quoted descriptions, and caches the hashtable.
+
+    .PARAMETER MamePath
+    Required path to the MAME executable.
+
+    .INPUTS
+    None. This function does not accept pipeline input.
+
+    .OUTPUTS
+    System.Collections.Hashtable
+    A lookup keyed by machine name with description strings as values.
+
+    .EXAMPLE
+    $lookup = Get-MameListFullLookup -MamePath 'G:\mame\mame.exe'
+    $lookup['pacman']
+
+    .NOTES
+    Internal helper available only within Convert-MameIniToText.
+    Cache files are stored in $env:TEMP as mame_listfull_<version>.clixml.
+    The executable is required even when a cache exists. An invalid
+    executable path or an unrecognized version causes return 1.
+    #>
     function Get-MameListFullLookup {
         [CmdletBinding()]
         param(
@@ -442,13 +592,13 @@ function Convert-MameIniToText {
         }
         catch {
             Write-Warning "Mame EXE not found at $MamePath"
-            exit 1
+            return 1
         }
         Write-Verbose "MAME path: $resolvedMamePath"
 
         if (-not (Test-Path -LiteralPath $resolvedMamePath -PathType Leaf)) {
             Write-Warning "Mame path is not a file: $resolvedMamePath"
-            exit 1
+            return 1
         }
 
         # Parse output of "mame.exe -listfull", with caching keyed by MAME version string.
@@ -458,7 +608,7 @@ function Convert-MameIniToText {
         }
         else {
             Write-Warning "Could not determine MAME version from '$resolvedMamePath'. Verify it is a valid MAME executable."
-            exit 1
+            return 1
         }
 
         Write-Verbose "MAME version: $mameVersion"
@@ -497,7 +647,7 @@ function Convert-MameIniToText {
     }
     catch {
         Write-Warning "Ini file not found at $IniPath"
-        exit 1
+        return 1
     }
     Write-Verbose "INI path: $IniPath"
 
