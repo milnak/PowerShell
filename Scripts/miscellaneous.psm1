@@ -623,12 +623,86 @@ function Invoke-MobileSheetsBackup {
     Write-Host "Backup completed successfully in $([math]::Round(($finishedAt - $startedAt).TotalSeconds, 2)) seconds."
 }
 
+function Install-OhMyPosh {
+    # Theme name to use. See https://ohmyposh.dev/docs/themes/
+    Param([string]$ThemeName = 'takuya')
+
+    $writeStatus = {
+        param(
+            [string]$Status,
+            [ConsoleColor]$Color,
+            [string]$Message
+        )
+
+        Write-Host ('  [{0,-7}] ' -f $Status) -NoNewline -ForegroundColor $Color
+        Write-Host $Message
+    }
+
+    Write-Host "`nOh My Posh setup" -ForegroundColor Cyan
+    Write-Host ('-' * 60) -ForegroundColor DarkGray
+
+    # winget install JanDeDobbeleer.OhMyPosh --source winget
+    if (-not (Get-Command -Name 'oh-my-posh.exe' -CommandType Application -ErrorAction SilentlyContinue)) {
+        & $writeStatus 'INSTALL' Yellow 'Installing Oh My Posh via winget'
+        winget install JanDeDobbeleer.OhMyPosh --source winget
+    }
+    else {
+        & $writeStatus 'OK' Green 'Oh My Posh is already installed'
+    }
+
+    # oh-my-posh font install meslo
+    if (-not (oh-my-posh font list | Select-String -SimpleMatch 'Meslo')) {
+        & $writeStatus 'INSTALL' Yellow 'Installing the Meslo font'
+        oh-my-posh font install meslo
+    }
+    else {
+        & $writeStatus 'OK' Green 'Meslo font is already installed'
+    }
+
+    # $terminalSettings = "$env:LocalAppData\Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json"
+    $terminalSettings = "$env:LocalAppData\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+    $fontName = 'MesloLGM Nerd Font'
+    Get-Content -LiteralPath $terminalSettings -Raw | ConvertFrom-Json | ForEach-Object {
+        if (-not $_.profiles.defaults.font.face -or $_.profiles.defaults.font.face -ne $fontName) {
+            & $writeStatus 'UPDATE' Yellow "Setting $fontName as the Windows Terminal default"
+            $_.profiles.defaults.font.face = $fontName
+            $_ | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $terminalSettings
+            & $writeStatus 'ACTION' Magenta 'Restart Windows Terminal to apply the font change'
+        }
+        else {
+            & $writeStatus 'OK' Green "$fontName is already the Windows Terminal default"
+        }
+    }
+
+    $ompThemePath = "$env:ProgramFiles\WindowsApps\ohmyposh.cli_31.4.1.0_x64__96v55e8n804z4\themes"
+    $ompThemeFile = Join-Path -Path $ompThemePath -ChildPath "$ThemeName.omp.json"
+    if (-not (Test-Path -LiteralPath $ompThemeFile)) {
+        & $writeStatus 'ERROR' Red "Theme file not found: $ompThemeFile"
+        return
+    }
+
+    $ompInitCommand = ('oh-my-posh init pwsh --config "{0}" | Invoke-Expression' -f $ompThemeFile)
+    if (-not (Get-Content $PROFILE | Select-String -SimpleMatch $ompInitCommand)) {
+        & $writeStatus 'UPDATE' Yellow 'Adding the Oh My Posh initialization command to the profile'
+        Add-Content -LiteralPath $PROFILE -Value $ompInitCommand
+    }
+    else {
+        # TODO: Replace existing init if it already exists.
+        & $writeStatus 'OK' Green 'The Oh My Posh initialization command is already in the profile'
+    }
+
+    Write-Host ('-' * 60) -ForegroundColor DarkGray
+    & $writeStatus 'DONE' Cyan "Setup complete (theme: $ThemeName)"
+    Write-Host ''
+}
+
 Export-ModuleMember -Function `
     Convert-ChordProToPdf, `
     Convert-SafeLink, `
     Convert-UltimateGuitarToChopro, `
     Format-PowerShell, `
     Get-JJazzLabMeta, `
+    Install-OhMyPosh, `
     Invoke-7zBackup, `
     Invoke-MobileSheetsBackup, `
     Invoke-RSync, `

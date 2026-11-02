@@ -185,17 +185,17 @@ The domain name to download, e.g. "example.com".
 Path or name of the wget executable. Defaults to "wget.exe".
 
 .EXAMPLE
-Get-WebPage -Domain "example.com"
+Get-WebPage -Url 'https://freebasstranscriptions.com/transcriptions/'
 
 .EXAMPLE
-Get-WebPage -Domain "mysite.org" -WgetCommand "C:\Tools\wget.exe"
+Get-WebPage -Url "mysite.org" -WgetCommand "C:\Tools\wget.exe"
 #>
 
 function Get-WebPage {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [string]$Domain,
+        [Uri]$Url,
 
         [string]$WgetCommand = 'wget.exe'
     )
@@ -208,43 +208,35 @@ function Get-WebPage {
         throw "wget command not found: $WgetCommand"
     }
 
+    $domain = $Url.Host
+
     # Build target folder name
-    $TargetPath = '{0}_{1}' -f $Domain, (Get-Date -Format 'yyMMdd')
-
-    if (Test-Path -LiteralPath $TargetPath) {
-        throw "Target path '$TargetPath' already exists."
-    }
-
-    # Create folder
-    $null = New-Item -ItemType Directory -Path $TargetPath -ErrorAction Stop
 
     Push-Location $TargetPath
-    try {
-        # Build wget arguments
-        $wgetArgs = @(
-            '--exclude-domains=googleapis.com,youtube.com'
-            '--span-hosts'
-            '--convert-links'
-            '--level=inf'
-            '--no-verbose'
-            '--page-requisites'
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36 Edge/15.15063'
-            "http://$Domain"
-        )
 
-        # Run wget
-        $process = Start-Process -FilePath $WgetCommand `
-            -ArgumentList $wgetArgs `
-            -NoNewWindow `
-            -Wait `
-            -PassThru
+    # Build wget arguments
+    $wgetArgs = @(
+        '--accept=.dll,.exe,.gif,.iso,.jpg,.mid,.mp3,.msi,.pdf,.png,.txt,.zip'
+        '--continue'
+        '--convert-links'
+        "--domains=$domain"
+        '--exclude-domains=googleapis.com,youtube.com'
+        '--execute', 'robots=off'
+        '--level=inf'
+        # '--no-parent'
+        '--no-verbose'
+        '--page-requisites'
+        '--recursive'
+        '--span-hosts'
+        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36 Edge/15.15063'
+        $Url
+    )
 
-        if ($process.ExitCode -ne 0) {
-            throw "wget failed with exit code $($process.ExitCode)"
-        }
-    }
-    finally {
-        Pop-Location
+    # Run wget
+    Write-Verbose "Running wget with arguments: $($wgetArgs -join ' ')"
+    & $WgetCommand @wgetArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "wget failed with exit code $LASTEXITCODE"
     }
 }
 

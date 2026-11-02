@@ -8,7 +8,6 @@ if ($host.Name -ne 'ConsoleHost') {
     return
 }
 
-
 # Load external functions
 
 Get-ChildItem "$PSScriptRoot\Scripts\*.psm1" | ForEach-Object {
@@ -47,3 +46,24 @@ if ((Get-Command -Name 'zoxide.exe' -CommandType Application -ErrorAction Silent
 }
 
 $env:RIPGREP_CONFIG_PATH = (Resolve-Path "~\.ripgreprc" -ErrorAction SilentlyContinue).Path
+
+# Terminal-Icons
+# Set Terminal font to "MesloLGM Nerd Font".
+$moduleName = 'Terminal-Icons'
+if (-not (Get-Module -ListAvailable  -Name $moduleName)) {
+    Write-Host -ForegroundColor Green "Installing $moduleName module..."
+    Install-Module -Name $moduleName -Repository PSGallery -Force
+}
+Import-Module $moduleName
+
+if ((Get-Command -Name 'oh-my-posh.exe' -CommandType Application -ErrorAction SilentlyContinue)) {
+	'Adding oh-my-posh'
+
+    oh-my-posh init pwsh --config 'takuya' | Invoke-Expression
+}
+
+# FD doesn't support configuration files, so create a wrapper.
+function fd { fd.exe --no-ignore $args }
+
+# topgrade doesn't support setting run-type in config.
+function topgrade { topgrade.exe --run-type damp }

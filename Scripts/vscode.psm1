@@ -1,6 +1,14 @@
 <#
 .SYNOPSIS
 Start editor.
+
+.EXAMPLE
+Invoke-Editor -Verbose $PROFILE -EditorCommand micro.exe
+Edit PowerShell $PROFILE file using micro.exe.
+
+.EXAMPLE
+Invoke-Editor -Path m* -EditorArgs '--new-window'
+Editor with wildcard path using the default editor in a new window.
 #>
 function Invoke-Editor {
     [CmdletBinding(SupportsShouldProcess)] # Support -Confirm, -WhatIf
@@ -9,8 +17,11 @@ function Invoke-Editor {
         [Alias('FullName')]
         [string[]]$Path,
 
-        # Editor command to use, e.g. 'code' or 'micro'.
-        [string]$EditorCommand = 'code.cmd'
+        # Editor command to use, e.g. 'code.cmd' or 'micro.exe'.
+        [string]$EditorCommand = 'code.cmd',
+
+        # Arguments to pass to the editor command, e.g. '--new-window'.
+        [string[]]$EditorArgs
     )
 
     begin {
@@ -21,20 +32,25 @@ function Invoke-Editor {
     }
 
     process {
+        function Add-SurroundingQuotes {
+            param ([Parameter(Mandatory = $true)][string]$InputString)
+
+            if (($InputString.StartsWith('"') -and $InputString.EndsWith('"'))) {
+                return $InputString
+            }
+            else {
+                return '"' + $InputString + '"'
+            }
+        }
+
         foreach ($item in $Path) {
             if ([Management.Automation.WildcardPattern]::ContainsWildcardCharacters($item)) {
-                Write-Verbose "Wildcard detected: $item"
                 # Wildcard detected. Add resolved wildcard matches.
+                Write-Verbose "Wildcard detected: $item"
                 $resolvedPaths = Resolve-Path -Path $item -ErrorAction Stop
-                if ($resolvedPaths.Count -eq 0) {
-                    Write-Warning "No matches found for wildcard: $item"
-                }
-                else {
-                    foreach ($resolvedPath in $resolvedPaths) {
-                        Write-Verbose "Resolved wildcard match: $resolvedPath"
-                        if ($PSCmdlet.ShouldProcess($File, "Edit with $EditorCommand")) {
-                            $files.Add($resolvedPath)
-                        }
+                foreach ($resolvedPath in $resolvedPaths) {
+                    if ($PSCmdlet.ShouldProcess("$resolvedPath", "Edit with $EditorCommand")) {
+                        $files.Add((Add-SurroundingQuotes $resolvedPath))
                     }
                 }
             }
@@ -42,17 +58,14 @@ function Invoke-Editor {
                 # No wildcard detected. Resolve literal path if file found, otherwise pass path as-is.
                 $resolvedPath = Resolve-Path -LiteralPath $item -ErrorAction SilentlyContinue
                 if ($resolvedPath) {
-                    Write-Verbose "Resolved literal path: $($resolvedPath)"
-                    if ($PSCmdlet.ShouldProcess($File, "Edit with $EditorCommand")) {
-                        $files.Add($resolvedPath)
+                    if ($PSCmdlet.ShouldProcess("$resolvedPath", "Edit with $EditorCommand")) {
+                        $files.Add((Add-SurroundingQuotes $resolvedPath))
                     }
 
                 }
                 else {
-                    # $file = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($item)
-                    Write-Verbose "Using unresolved path: $item"
-                    if ($PSCmdlet.ShouldProcess($File, "Edit with $EditorCommand")) {
-                        $files.Add($item)
+                    if ($PSCmdlet.ShouldProcess("$item", "Edit with $EditorCommand")) {
+                        $files.Add((Add-SurroundingQuotes $item))
                     }
                 }
             }
@@ -72,11 +85,33 @@ function Invoke-Editor {
                 Write-Host $_
             }
             Write-Host ''
-            & $EditorCommand @files
+            $parameters = @{
+                FilePath     = $EditorCommand
+                ArgumentList = ($EditorArgs + $files)
+            }
+
+            # Launch the editor with the specified arguments and files.
+            # Not using "&" as that sometimes ends up causing Terminal not to close.
+            if ($EditorCommand -like '*.cmd') {
+                # For .cmd (e.g. code.cmd) don't show the command window.
+                Start-Process -NoNewWindow @parameters
+            }
+            else {
+                Start-Process @parameters
+            }
         }
     }
 }
 
+function code {
+    Invoke-Editor -EditorCommand 'code.cmd' -EditorArgs @() -Path $args
+}
+
+function micro {
+    Invoke-Editor -EditorCommand 'micro.exe' -EditorArgs @() -Path $args
+}
 
 Export-ModuleMember -Function `
+    code, `
+    micro, `
     Invoke-Editor

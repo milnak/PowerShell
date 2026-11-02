@@ -1,15 +1,33 @@
 function Invoke-InvertPdfColors {
-    Param(
-        [Parameter(Mandatory)]
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName')]
         [string]$Path
     )
 
-    $outName = [IO.Path]::GetFileNameWithoutExtension($Path) + '-inverted.pdf'
+    begin {
+        Write-Verbose "[Invoke-InvertPdfColors] BEGIN"
 
-    $gsPath = Get-Command -Name 'gs.exe' -ErrorAction Stop | Select-Object -ExpandProperty Source
-    & $gsPath -sDEVICE=pdfwrite -o $outName -dTransferFunctionInfo=/Apply -f $Path
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Ghostscript failed with exit code $LASTEXITCODE"
+        Get-Command -Name 'gs.exe' -ErrorAction Stop | Out-Null
+    }
+
+    process {
+        Write-Verbose "[Invoke-InvertPdfColors] PROCESS $Path"
+
+        $outName = [IO.Path]::GetFileNameWithoutExtension($Path) + '-inverted.pdf'
+
+        if ($PSCmdlet.ShouldProcess($Path, 'Invert PDF colors')) {
+            $gsPath = Get-Command -Name 'gs.exe' -ErrorAction Stop | Select-Object -ExpandProperty Source
+            & $gsPath -sDEVICE=pdfwrite -o $outName -dTransferFunctionInfo=/Apply -f $Path
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "Ghostscript failed with exit code $LASTEXITCODE"
+            }
+        }
+    }
+
+    end {
+        Write-Verbose "[Invoke-InvertPdfColors] END"
     }
 }
 
