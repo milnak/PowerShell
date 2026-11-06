@@ -685,10 +685,136 @@ function ConvertTo-Gif {
     }
 }
 
+function ConvertTo-PitchShift {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceFile,
+
+        [Parameter(Mandatory)]
+        [string]$TargetFile,
+
+        [switch]$Force,
+
+        [Parameter(Mandatory, PArameterSetName = 'Semitones')]
+        [int]$Semitones,
+
+        [Parameter(Mandatory, ParameterSetName = 'Keys')]
+        [ValidateSet('A', 'B', 'C', 'D', 'E', 'F', 'G', 'Ab', 'Bb', 'Db', 'Eb', 'Gb', 'A#', 'C#', 'D#', 'F#', 'G#')]
+        [string]$SourceKey,
+        [ValidateSet('A', 'B', 'C', 'D', 'E', 'F', 'G', 'Ab', 'Bb', 'Db', 'Eb', 'Gb', 'A#', 'C#', 'D#', 'F#', 'G#')]
+        [Parameter(Mandatory, ParameterSetName = 'Keys')]
+        [string]$TargetKey
+    )
+
+    function Get-Semitones {
+        [CmdletBinding()]
+        [OutputType([int])]
+        param(
+            [Parameter(Mandatory)]
+            [ValidateSet('A', 'B', 'C', 'D', 'E', 'F', 'G', 'Ab', 'Bb', 'Db', 'Eb', 'Gb', 'A#', 'C#', 'D#', 'F#', 'G#')]
+            [string]$SourceKey,
+
+            [Parameter(Mandatory)]
+            [ValidateSet('A', 'B', 'C', 'D', 'E', 'F', 'G', 'Ab', 'Bb', 'Db', 'Eb', 'Gb', 'A#', 'C#', 'D#', 'F#', 'G#')]
+            [string]$TargetKey
+        )
+
+        # Distance in semitones from "C".
+        $notePositions = @{
+            'C' = 0; 'C#' = 1; 'Db' = 1
+            'D' = 2; 'D#' = 3; 'Eb' = 3
+            'E' = 4
+            'F' = 5; 'F#' = 6; 'Gb' = 6
+            'G' = 7; 'G#' = 8; 'Ab' = 8
+            'A' = 9; 'A#' = 10; 'Bb' = 10
+            'B' = 11;
+        }
+
+        $semitones = $notePositions[$TargetKey] - $notePositions[$SourceKey]
+        if ($semitones -gt 6) {
+            return $semitones - 12
+        }
+        elseif ($semitones -lt -6) {
+            return $semitones + 12
+        }
+        return $semitones
+    }
+
+    if ($PSCmdlet.ParameterSetName -eq 'Keys') {
+        $Semitones = Get-Semitones -SourceKey $SourceKey -TargetKey $TargetKey
+        Write-Verbose "$SourceKey -> $TargetKey; Calculated semitones: $Semitones"
+    }
+
+    if ($Semitones -eq 0) {
+        Write-Host "No pitch shift needed."
+        return
+    }
+
+    # Ensure tools are available before processing any files
+    'ffprobe.exe', 'ffmpeg.exe' | ForEach-Object {
+        Get-Command -Name $_ -CommandType Application -ErrorAction Stop | Out-Null
+    }
+
+    $ffprobe_args = @(
+        '-hide_banner',
+        '-v', 'error',
+        '-show_entries', 'stream=index,sample_rate',
+        '-of', 'json'
+        $SourceFile
+    )
+    $ffprobeOutput = ffprobe.exe @ffprobe_args | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "ffprobe exited with code $LASTEXITCODE"
+        return
+    }
+
+    $sample_rate = $ffprobeOutput.streams | Where-Object { $_.sample_rate }
+    if ($sample_rate.Count -gt 1) {
+        Write-Host "Multiple sample rates found. Cannot continue."
+        return
+    }
+    $sample_rate = $sample_rate[0].sample_rate
+
+    # Example:
+    # Semitones (n): -3
+    # PITCH_RATIO: 2 ^(-3/12) = 2 ^ (0.25) = 0.8409
+    # Tempo Correction = (1 / PITCH_RATIO): 1/0.8409 = 1.1892
+
+    [float]$PITCH_RATIO = [math]::Pow(2, $Semitones / 12)
+    [float]$TEMPO_CORRECTION = 1 / $PITCH_RATIO
+
+    $af = 'asetrate={0}*{1},atempo={2}' -f $sample_rate, $PITCH_RATIO, $TEMPO_CORRECTION
+    Write-Host "Sample rate: $sample_rate; Applying audio filter: $af"
+
+    $ffmpeg_args = @(
+        '-hide_banner',
+        '-i', $SourceFile,
+        '-stats',
+        '-loglevel', 'warning',
+        '-nostdin',
+        '-af', $af
+    )
+    if ($Force) {
+        $ffmpeg_args += '-y'
+    }
+    $ffmpeg_args += $TargetFile
+
+    Write-Verbose ("Starting ffmpeg with arguments: $($ffmpeg_args -join ' ')")
+
+    ffmpeg.exe @ffmpeg_args
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "ffmpeg exited with code $LASTEXITCODE"
+        return
+    }
+}
+
 Export-ModuleMember -Function `
     Convert-MediaInfoToHtml, `
     Convert-StemsToMp3, `
-    ConvertTo-Gif,
+    ConvertTo-Gif, `
     ConvertTo-Mp3, `
     ConvertTo-MultitrackOgg, `
-    Invoke-Normalize
+    Invoke-Normalize, `
+    ConvertTo-PitchShift, `
+    Get-Semitones
