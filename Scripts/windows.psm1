@@ -3,6 +3,15 @@
     Launch notepad4.
 .DESCRIPTION
     Starts the notepad4 executable, forwarding any provided arguments.
+.INPUTS
+    None. Supply filenames or options as arguments.
+.OUTPUTS
+    None. Starts the editor without waiting.
+.EXAMPLE
+    Invoke-notepad '.\notes.txt'
+.NOTES
+    Requires notepad4.exe on PATH. Arguments use Start-Process command-line
+    joining rules; quote paths containing spaces appropriately.
 #>
 function Invoke-notepad {
     Start-Process -NoNewWindow -FilePath 'notepad4.exe' -ArgumentList $args
@@ -17,6 +26,15 @@ function Invoke-notepad {
     ProductId and returns the InstallLocation value.
 .PARAMETER ProductId
     GUID or product identifier found in the uninstall registry key.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. InstallLocation when found; otherwise no output.
+.EXAMPLE
+    Get-UninstallPath -ProductId '{00000000-0000-0000-0000-000000000000}'
+.NOTES
+    Searches the current process's HKCU and HKLM uninstall registry views,
+    not both 32-bit and 64-bit views explicitly.
 #>
 function Get-UninstallPath {
     param(
@@ -52,6 +70,17 @@ function Get-UninstallPath {
     Remove an entry from PATH.
 .PARAMETER Path
     The path to add or remove.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. PATH entries in List mode; no output when changing PATH.
+.EXAMPLE
+    Get-Path -List
+.EXAMPLE
+    Get-Path -Add -Top -Path 'C:\Tools'
+.NOTES
+    Exported with the alias path. Trims trailing backslashes and avoids
+    duplicate entries when adding. Remove uses wildcard matching.
 #>
 function Get-Path {
     param(
@@ -106,6 +135,17 @@ function Get-Path {
 .DESCRIPTION
     Gathers Windows version, build, architecture, registered owner, and
     decrypts the product key from the registry. Adapted from WinProdKeyFinder.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.Management.Automation.PSCustomObject. Edition, Version, OSBuild,
+    OSArch, RegisteredOwner, ProductID, Sku, and ProductKey properties.
+.EXAMPLE
+    Get-SystemInfo | Select-Object Edition, Version, OSBuild, OSArch
+.NOTES
+    Requires Windows registry access and Get-WmiObject, which is not
+    available natively in PowerShell 7. The full result contains product-key
+    and registered-owner information; avoid logging or publishing it.
 #>
 function Get-SystemInfo {
     # Derived from WinProdKeyFinder: https://github.com/mrpeardotnet/WinProdKeyFinder (DecodeProductKeyWin8AndUp)

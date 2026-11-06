@@ -6,6 +6,12 @@
     then pushes the location stack to that path.
 .PARAMETER Path
     Directory path to create and enter.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None. Changes the current location and location stack.
+.EXAMPLE
+    New-FolderAndSetLocation -Path '.\work'
 #>
 function New-FolderAndSetLocation {
     [CmdletBinding()]
@@ -19,8 +25,18 @@ function New-FolderAndSetLocation {
 
 <#
 .SYNOPSIS
-Creates a temporary folder and cds into it.
-Outputs the path to allow for assigning to a variable.
+Creates a randomly named temporary directory and enters it.
+.DESCRIPTION
+Creates a directory under the system temporary path, pushes it onto the
+location stack, and returns its path for later use.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. The full path of the new directory.
+.EXAMPLE
+$work = New-TempFolderAndSetLocation
+.NOTES
+The directory is not automatically removed. Use Pop-Location to return.
 #>
 function New-TempFolderAndSetLocation {
     [CmdletBinding()]
@@ -33,9 +49,21 @@ function New-TempFolderAndSetLocation {
 
 <#
 .SYNOPSIS
-Moves an item to the recycle bin.
+Moves existing items to the Windows Recycle Bin.
+.DESCRIPTION
+Uses the Shell.Application COM delete verb for each literal path, warning
+for missing items. Supports -WhatIf and -Confirm.
+.PARAMETER Paths
+One or more paths to recycle. Accepts strings from the pipeline.
+.INPUTS
+System.String. One or more item paths.
+.OUTPUTS
+None.
 .EXAMPLE
- Get-Item * |Remove-ItemToRecycleBin -Verbose -Confirm
+Get-ChildItem -File '*.tmp' | Select-Object -ExpandProperty FullName | Remove-ItemToRecycleBin -WhatIf
+.NOTES
+Requires Windows Shell COM support. The Shell object is created even with
+-WhatIf; actual recycling depends on the shell and target volume.
 #>
 function Remove-ItemToRecycleBin {
     [CmdletBinding(SupportsShouldProcess)]
@@ -73,12 +101,23 @@ function Remove-ItemToRecycleBin {
 Removes a folder recursively.
 
 .DESCRIPTION
-Force removes a folder recursively, prompting first.
+Validates that the target is a directory and not a filesystem root, then
+requires the literal response yes before recursively removing it.
 
 .PARAMETER Path
     Directory path to remove.
 .PARAMETER Recycle
-    Switch indicating whether to move the folder to the recycle bin instead of permanently deleting it.
+    Recycle enumerated files using Windows Shell COM before permanently
+    removing the directory tree. The directory itself is not recycled.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None.
+.EXAMPLE
+    Remove-FolderRecursive -Path '.\obsolete-output' -Recycle
+.NOTES
+    Permanently removes remaining contents with -Recurse -Force after
+    confirmation. Does not support -WhatIf or -Confirm.
 #>
 function Remove-FolderRecursive {
     [CmdletBinding()]
@@ -132,9 +171,20 @@ function Remove-FolderRecursive {
 
 <#
 .SYNOPSIS
-Recursive file find.
+Returns full paths of files matching a recursive search.
 .DESCRIPTION
-By default will return all files starting in current folder tree.
+Searches files below a literal starting directory using the filesystem
+provider's filename filter. Defaults to all files below the current directory.
+.PARAMETER Filter
+Filename filter such as *.ps1. Defaults to *.
+.PARAMETER Path
+Starting directory. Defaults to the current directory.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Full file paths.
+.EXAMPLE
+Invoke-RecursiveFileFind -Filter '*.ps1' -Path '.\Scripts'
 #>
 function Invoke-RecursiveFileFind {
     [CmdletBinding()]
@@ -149,9 +199,21 @@ function Invoke-RecursiveFileFind {
 
 <#
 .SYNOPSIS
-Recursive Grep
+Searches recursively for lines matching a regular expression.
 .DESCRIPTION
-By default will start in current folder
+Enumerates files under the current directory with the specified filename
+filter and passes them to Select-String.
+.PARAMETER Pattern
+Regular expression to search for in file contents.
+.PARAMETER Files
+Filename filter, not a starting path. The default is the literal filter .
+so supply a filter such as * or *.psm1 to select ordinary files.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+Microsoft.PowerShell.Commands.MatchInfo. Matching lines and their locations.
+.EXAMPLE
+Invoke-RecursiveGrep -Pattern 'Export-ModuleMember' -Files '*.psm1'
 #>
 function Invoke-RecursiveGrep {
     [CmdletBinding()]
@@ -168,8 +230,16 @@ function Invoke-RecursiveGrep {
 .DESCRIPTION
     Takes file paths from pipeline or arguments, outputs lowercase hash and
     relative path, separated by ' *' like the UNIX tool.
-.PARAMETER Files
-    One or more file paths to hash.
+.PARAMETER File
+    File path to hash. Accepts pipeline strings or objects with FullName
+    or Path properties; those names are also parameter aliases.
+.INPUTS
+    System.String, or objects with FullName or Path properties.
+.OUTPUTS
+    System.String. Lowercase SHA256 hash and relative filename in sha256sum
+    binary-mode format, with forward slashes as path separators.
+.EXAMPLE
+    Get-ChildItem -File '*.zip' | Get-FileSha256Hash
 #>
 function Get-FileSha256Hash {
     [CmdletBinding()]
@@ -194,7 +264,21 @@ function Get-FileSha256Hash {
 
 <#
 .SYNOPSIS
-Similar to Get-FileHash but also returns Base64 encoded value in 'HashBase64' field.
+Returns hexadecimal and Base64 file hashes.
+.DESCRIPTION
+Reads each file using the selected hash algorithm and returns both encodings
+alongside the algorithm and resolved path.
+.PARAMETER Path
+One or more literal file paths. Accepts pipeline strings or Path properties.
+.PARAMETER Algorithm
+SHA1, SHA256, SHA384, SHA512, or MD5. Defaults to SHA256.
+.INPUTS
+System.String, or objects with a Path property.
+.OUTPUTS
+System.Management.Automation.PSCustomObject. Algorithm, Hash, HashBase64,
+and Path properties.
+.EXAMPLE
+Get-FileHashBase64 -Path '.\archive.zip' -Algorithm SHA256
 #>
 function Get-FileHashBase64 {
     [CmdletBinding()]
@@ -233,7 +317,20 @@ function Get-FileHashBase64 {
 
 <#
 .SYNOPSIS
-Use sysinternals "du" to show child folder sizes.
+Shows the 15 largest directory entries reported by Sysinternals DU.
+.DESCRIPTION
+Reads DU's depth-one CSV report, sorts by on-disk size, and returns the first
+15 entries with formatted size and path properties.
+.PARAMETER Path
+Directory to measure. Defaults to the current directory.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.Management.Automation.PSCustomObject. Size and Path properties.
+.EXAMPLE
+Invoke-DU -Path 'C:\Tools'
+.NOTES
+Requires Sysinternals du.exe on PATH.
 #>
 function Invoke-DU {
     [CmdletBinding()]
@@ -255,8 +352,19 @@ function Invoke-DU {
 <#
 .SYNOPSIS
     Take ownership of a file or folder.
+.DESCRIPTION
+    Runs takeown and grants the current user's SID full control using icacls.
+    Directories are processed recursively. Supports -WhatIf and -Confirm.
+.PARAMETER File
+    File or directory path. Accepts pipeline strings or objects with FullName
+    or Path properties; those names are also parameter aliases.
+.INPUTS
+    System.String, or objects with FullName or Path properties.
+.OUTPUTS
+    System.String. Native takeown and icacls output.
 .NOTES
     takeown.exe and icacls.exe (both included in Windows) need to be in $env:PATH
+    An elevated PowerShell session is required, including when using -WhatIf.
 
     If a folder is specified, all files and subfolders of that folder will change ownership.
 .EXAMPLE
@@ -324,7 +432,19 @@ function Set-SelfOwnership {
 
 <#
 .SYNOPSIS
-Display disk information in human readable format.
+Displays drive capacity, free space, and usage in a table.
+.DESCRIPTION
+Queries volumes with drive letters and formats free/total GiB and a ten-block
+usage indicator, sorted by drive letter.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+Microsoft.PowerShell.Commands.Internal.Format.FormatStartData and related
+formatting records, not reusable volume objects.
+.EXAMPLE
+Get-DiskUsage
+.NOTES
+Requires the Windows Get-Volume command.
 #>
 function Get-DiskUsage {
     [CmdletBinding()]
@@ -345,6 +465,25 @@ function Get-DiskUsage {
 }
 
 
+<#
+.SYNOPSIS
+Returns a recursive directory tree as text.
+.DESCRIPTION
+Lists directories alphabetically, including hidden entries. Optionally
+includes files before subdirectories and uses ASCII branch characters.
+.PARAMETER Path
+Root directory to display. Defaults to the current location.
+.PARAMETER ShowFiles
+Include files, including hidden files, in each directory.
+.PARAMETER UseAscii
+Use ASCII connectors instead of Unicode box-drawing characters.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Root label and tree lines.
+.EXAMPLE
+Get-ChildItemTree -Path '.\Scripts' -ShowFiles -UseAscii
+#>
 function Get-ChildItemTree {
     param(
         [string]$Path = (Get-Location).Path,
@@ -367,6 +506,25 @@ function Get-ChildItemTree {
         $dash = [char]0x2500    # ─
     }
 
+    <#
+    .SYNOPSIS
+    Emits the entries beneath one directory in a text tree.
+    .DESCRIPTION
+    Recursively renders sorted directories and optional files using connector
+    characters and ShowFiles from the enclosing Get-ChildItemTree invocation.
+    .PARAMETER Dir
+    Directory whose children should be rendered.
+    .PARAMETER Prefix
+    Indentation and continuation connectors preceding each rendered line.
+    .INPUTS
+    None. This function does not accept pipeline input.
+    .OUTPUTS
+    System.String. Tree lines below Dir.
+    .EXAMPLE
+    Show-TreeDir -Dir $root -Prefix ''
+    .NOTES
+    Local helper; requires the enclosing function's rendering variables.
+    #>
     function Show-TreeDir {
         param(
             [string]$Dir,
@@ -417,11 +575,27 @@ function Get-ChildItemTree {
 }
 
 <#
+.SYNOPSIS
+    Synchronizes selected backup contents to a destination on drive F:.
 .DESCRIPTION
-    Copies files from a source directory to a destination directory using robocopy.
-    Creates the destination directory if it does not exist.
-    Writes a log file to the destination directory.
-    This function is a wrapper around robocopy.exe.
+    Runs Robocopy recursively with /PURGE, /XO, no retries, and exclusions
+    for system folders, temporary data, executables, and disk-image formats.
+    Creates the destination and reports Robocopy's bitmask exit status.
+.PARAMETER Source
+    Existing source directory.
+.PARAMETER Destination
+    Destination directory whose drive qualifier must be F:.
+.PARAMETER WhatIf
+    Pass /L to Robocopy to list operations instead of copying or deleting.
+    The destination directory is still created before Robocopy runs.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. Robocopy console output.
+.NOTES
+    Requires robocopy.exe and attrib.exe. /PURGE deletes destination entries
+    absent from the source; /XO skips older source files. Normal runs write
+    a timestamped log under $env:TEMP, not the destination directory.
 
 .EXAMPLE
     Invoke-RobocopyBackup -Source $env:USERPROFILE -Destination 'f:\PCBackup\UserProfile'

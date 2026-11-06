@@ -57,13 +57,52 @@ if (-not (Get-Module -ListAvailable  -Name $moduleName)) {
 Import-Module $moduleName
 
 if ((Get-Command -Name 'oh-my-posh.exe' -CommandType Application -ErrorAction SilentlyContinue)) {
-	'Adding oh-my-posh'
+    'Adding oh-my-posh'
 
     oh-my-posh init pwsh --config 'takuya' | Invoke-Expression
 }
 
 # FD doesn't support configuration files, so create a wrapper.
-function fd { fd.exe --no-ignore $args }
+
+<#
+.SYNOPSIS
+Runs fd with ignored entries included.
+.DESCRIPTION
+Forwards arguments to fd.exe after --no-ignore so ignore files do not
+exclude matches.
+.INPUTS
+None. Supply search patterns and options as arguments.
+.OUTPUTS
+System.String. Native fd search results.
+.EXAMPLE
+fd --extension psm1
+.NOTES
+Requires fd.exe on PATH. Hidden-file inclusion still follows fd's own options.
+#>
+function fd {
+    fd.exe --no-ignore $args
+}
 
 # topgrade doesn't support setting run-type in config.
-function topgrade { topgrade.exe --run-type damp }
+
+<#
+.SYNOPSIS
+Runs Topgrade with its damp run type.
+.DESCRIPTION
+Invokes topgrade.exe --run-type damp, which shows proposed commands instead
+of executing the upgrade steps.
+.INPUTS
+None. Additional arguments are not forwarded.
+.OUTPUTS
+System.String. Native Topgrade output.
+.EXAMPLE
+topgrade
+.NOTES
+Requires topgrade.exe on PATH.
+#>
+function topgrade {
+    topgrade.exe --run-type damp
+}
+
+# mitigation for difftastic bug 1108
+$env:COLUMNS = $Host.UI.RawUI.WindowSize.Width

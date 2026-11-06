@@ -16,12 +16,13 @@ None. This function does not accept pipeline input.
 .OUTPUTS
 System.Xml.XmlDocument
 The MAME listxml document.
+System.Int32
+Returns 1 when the executable cannot be resolved or its version is unrecognized.
 
 .EXAMPLE
 # Display in "mame -listfull" format.
 $xml = Get-MameListXmlLookup -MamePath 'G:\MAME\mame.exe' -Verbose
 $xml.mame.machine | Select-Object name, description | ForEach-Object { '{0,-17} "{1}"' -f $_.name, $_.description }
-}
 
 .NOTES
 Cache files are stored in $env:TEMP as mame_listxml_<version>.clixml.
@@ -146,6 +147,8 @@ $roms | Where-Object CloneOf -ne $null | Select-Object Rom,CloneOf
 Uses Get-MameListXmlLookup and its version-specific XML cache in $env:TEMP.
 Modern machine entries with runnable="no" are excluded; legacy mame game
 entries must have runnable="yes". Clones and ROM dependencies are retained.
+Also accepts datafile.game XML entries. This lists installed ZIP matches,
+unlike Get-MameRomList, which filters the executable's full machine catalog.
 #>
 function Get-MameRoms {
 
@@ -263,6 +266,8 @@ installation directory and temporary folder. Supports -WhatIf and -Confirm
 for downloading and extracting the release; version checks and any initial
 installation prompt occur before ShouldProcess. Removes the downloaded
 installer after the extraction attempt.
+Extraction uses overwrite confirmation suppression and can replace existing
+files in the installation directory.
 #>
 function Invoke-MameUpdate {
     [CmdletBinding(SupportsShouldProcess)]
@@ -271,7 +276,10 @@ function Invoke-MameUpdate {
     $mameExe = (Join-Path $Path 'mame.exe')
 
     # Ensure 7z exists
+    Write-Verbose 'Checking for 7z.exe...'
     $null = Get-Command -Name '7z.exe' -CommandType Application -ErrorAction Stop
+
+    Write-Verbose 'Determining local MAME version...'
 
     # If mame.exe doesn't exist, prompt for fresh install
     if (-not (Test-Path -LiteralPath $mameExe -PathType Leaf)) {
@@ -300,6 +308,7 @@ function Invoke-MameUpdate {
     Write-Host "Local MAME version is $localFriendly ($localVersion)"
 
     # Query GitHub API
+    Write-Verbose 'Querying GitHub for latest MAME release...'
     $response = Invoke-RestMethod -Uri 'https://api.github.com/repos/mamedev/mame/releases/latest' -ErrorAction Stop
     $remoteVersion = $response.tag_name  # e.g. mame0276
 
@@ -396,6 +405,7 @@ Get-MameRomList | Group-Object Control | Sort-Object -Descending Count
 .NOTES
 Uses a version-specific XML cache in $env:TEMP. Requires mame.machine XML
 entries. Warns when mameconfig is not 10 but continues processing.
+Does not check whether the returned ROMs are installed or verify ROM archives.
 #>
 function Get-MameRomList {
     [CmdletBinding()]
@@ -475,6 +485,8 @@ None. This function does not accept pipeline input.
 .OUTPUTS
 System.Management.Automation.PSCustomObject
 Objects with Name, Section, and Description properties.
+System.Int32
+Returns 1 when the INI path cannot be resolved.
 
 .EXAMPLE
 Convert-MameIniToText -Verbose `
@@ -487,8 +499,9 @@ Convert-MameIniToText -Verbose `
 .NOTES
 Description is empty when the specified MAME version does not recognize a
 name. Cache files are stored in $env:TEMP as mame_listfull_<version>.clixml.
-An unresolved INI path, an invalid executable path, or an unrecognized MAME
-version causes return 1.
+An unresolved INI path causes return 1. The MAME lookup helper also returns 1
+for an invalid executable or version, which cannot be used as a description
+lookup by this function.
 #>
 function Convert-MameIniToText {
     [CmdletBinding()]
@@ -522,6 +535,8 @@ function Convert-MameIniToText {
 
     .NOTES
     Internal helper available only within Convert-MameIniToText.
+    Machine names are limited to the leading word characters on each line;
+    this is a folder-list parser, not a general key/value INI parser.
     #>
     function Get-IniContent {
         [CmdletBinding()]
@@ -570,6 +585,8 @@ function Convert-MameIniToText {
     .OUTPUTS
     System.Collections.Hashtable
     A lookup keyed by machine name with description strings as values.
+    System.Int32
+    Returns 1 when the executable cannot be resolved or its version is unrecognized.
 
     .EXAMPLE
     $lookup = Get-MameListFullLookup -MamePath 'G:\mame\mame.exe'

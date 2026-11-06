@@ -1,3 +1,40 @@
+<#
+.SYNOPSIS
+    Searches, lists, installs, removes, downloads, or upgrades WinGet packages.
+.DESCRIPTION
+    Wraps Microsoft.WinGet.Client using mutually exclusive operation switches.
+    Search and list return package records; mutating operations report status
+    to the host. Installs the client module when it is unavailable.
+.PARAMETER Download
+    Export the installer for Id to DestinationPath.
+.PARAMETER Install
+    Install Id from the winget source.
+.PARAMETER Uninstall
+    Uninstall the package identified by Id.
+.PARAMETER Search
+    Find Id in the winget source.
+.PARAMETER List
+    Return installed packages whose source is winget.
+.PARAMETER Upgrade
+    Attempt to update every installed winget-source package in name order.
+.PARAMETER Id
+    Package identifier for Download, Install, Uninstall, or Search.
+.PARAMETER DestinationPath
+    Download directory. Required for Download.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.Object. WinGet package records for Search and List; mutating
+    operations do not return their status records.
+.EXAMPLE
+    Invoke-Winget -Search -Id Microsoft.Edit
+.EXAMPLE
+    Invoke-Winget -List | Sort-Object Name
+.NOTES
+    Requires Windows Package Manager. Can install Microsoft.WinGet.Client
+    from PSGallery and import it. Mutating operations can change installed
+    software and require elevation; this wrapper does not support -WhatIf.
+#>
 function Invoke-Winget {
     # Missing functions:
     #   configure  Configures the system into a desired state
@@ -172,7 +209,20 @@ function Invoke-Winget {
 
 <#
 .SYNOPSIS
-Check for and install winget package updates.
+Runs an elevated interactive upgrade of all eligible WinGet packages.
+.DESCRIPTION
+Invokes sudo --inline winget upgrade with agreement acceptance, --all,
+--include-unknown, and --interactive.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Any standard output emitted by sudo or WinGet.
+.EXAMPLE
+Invoke-WingetUpgrade
+.NOTES
+Requires sudo.exe and winget.exe on PATH and configured Windows sudo support.
+Accepts package/source agreements and can display installer UI. Does not
+support -WhatIf or -Confirm.
 #>
 function Invoke-WingetUpgrade {
     Get-Command -Name 'sudo.exe' -CommandType Application -ErrorAction Stop | Out-Null

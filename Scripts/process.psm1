@@ -2,12 +2,23 @@
 .SYNOPSIS
     Terminate a process gracefully or forcefully.
 .DESCRIPTION
-    Attempts to close the main window of the named process. If -Force is
-    specified and the process remains, Stop-Process is invoked to kill it.
+    When exactly one process matches, requests closure of its main window.
+    With -Force, immediately calls Stop-Process if it has not exited.
+    Multiple matches are reported without terminating them.
 .PARAMETER Name
     Name of the process to terminate.
 .PARAMETER Force
     Forcefully stop the process if it does not exit gracefully.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. Status when no process, multiple processes, or an exited
+    process is detected.
+.EXAMPLE
+    Invoke-Kill -Name notepad
+.NOTES
+    Does not wait for graceful shutdown or support -WhatIf. -Force can
+    discard unsaved work and stops by name after the initial single-match check.
 #>
 function Invoke-Kill {
     param(
@@ -41,9 +52,17 @@ function Invoke-Kill {
 <#
 .SYNOPSIS
 Gets the total working set size for one or more running processes.
+.DESCRIPTION
+Sums WorkingSet across all matching instances of each name and returns one
+human-readable line per name. Warns when no matching process is running.
 
 .PARAMETER ProcessName
-One or more process names (without .exe). This parameter is required.
+One or more process names without .exe. Accepts pipeline strings or objects
+with ProcessName or Name properties.
+.INPUTS
+System.String, or objects with ProcessName or Name properties.
+.OUTPUTS
+System.String. Process name and total working set with a binary size suffix.
 
 .EXAMPLE
 Get-ProcessWorkingSet msedgewebview2
@@ -60,6 +79,23 @@ function Get-ProcessWorkingSet {
     )
 
     process {
+        <#
+        .SYNOPSIS
+        Formats a nonnegative byte count with a binary size suffix.
+        .DESCRIPTION
+        Selects TB, GB, MB, KB, or Bytes. Scaled values use two decimal places;
+        byte values use no decimal places, following the current culture.
+        .PARAMETER Bytes
+        Nonnegative byte count to format.
+        .INPUTS
+        None. This function does not accept pipeline input.
+        .OUTPUTS
+        System.String. Formatted size.
+        .EXAMPLE
+        Convert-Bytes -Bytes 1536
+        .NOTES
+        Local helper for Get-ProcessWorkingSet.
+        #>
         function Convert-Bytes {
             param (
                 [Parameter(Mandatory = $true)]

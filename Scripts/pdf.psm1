@@ -1,3 +1,21 @@
+<#
+.SYNOPSIS
+    Rewrites a PDF through Ghostscript with transfer functions applied.
+.DESCRIPTION
+    Runs Ghostscript's pdfwrite device with TransferFunctionInfo=/Apply and
+    writes <base-name>-inverted.pdf in the current directory.
+.PARAMETER Path
+    PDF path. Accepts pipeline strings or objects with a Path or FullName property.
+.INPUTS
+    System.String, or objects with Path or FullName properties.
+.OUTPUTS
+    System.String. Any standard output emitted by Ghostscript.
+.EXAMPLE
+    Invoke-InvertPdfColors -Path '.\document.pdf' -WhatIf
+.NOTES
+    Requires gs.exe on PATH. Supports -WhatIf/-Confirm. The command applies
+    existing transfer functions; it does not define an inversion function.
+#>
 function Invoke-InvertPdfColors {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -38,12 +56,19 @@ function Invoke-InvertPdfColors {
 .DESCRIPTION
     Uses qpdf to split a PDF file into separate per-page PDF files named
     with a numeric suffix (e.g. document-1.pdf, document-2.pdf, ...).
-.PARAMETER File
-    Path to the PDF file to split.
+.PARAMETER InFile
+    PDF path. Accepts pipeline strings or objects with InFile or FullName properties.
 .EXAMPLE
     Invoke-PdfSplitPages -InFile 'document.pdf'
 .EXAMPLE
     Get-ChildItem *.pdf | Invoke-PdfSplitPages
+.INPUTS
+    System.String, or objects with InFile or FullName properties.
+.OUTPUTS
+    System.String. Any standard output emitted by qpdf.
+.NOTES
+    Requires qpdf.exe on PATH. Supports -WhatIf/-Confirm. Per-page output
+    uses the input's leaf filename as a template in the current directory.
 #>
 function Invoke-PdfSplitPages {
     [CmdletBinding(SupportsShouldProcess)]
@@ -75,11 +100,19 @@ function Invoke-PdfSplitPages {
 .DESCRIPTION
     Uses qpdf to decrypt a PDF, writing the result with a -decrypted suffix.
 .PARAMETER File
-    Path to the encrypted PDF file.
+    PDF path. Accepts pipeline strings or objects with File or FullName properties.
 .EXAMPLE
     Invoke-PdfDecrypt -File 'secure.pdf'
 .EXAMPLE
     Get-ChildItem *.pdf | Invoke-PdfDecrypt
+.INPUTS
+    System.String, or objects with File or FullName properties.
+.OUTPUTS
+    System.String. Any standard output emitted by qpdf.
+.NOTES
+    Requires qpdf.exe on PATH. Supports -WhatIf/-Confirm. Writes
+    <base-name>-decrypted.pdf in the current directory. No password parameter
+    is supplied, so PDFs requiring a password may fail.
 #>
 function Invoke-PdfDecrypt {
     [CmdletBinding(SupportsShouldProcess)]
@@ -119,6 +152,14 @@ function Invoke-PdfDecrypt {
     Filename prefix used to match PDFs (e.g. 'chapter' matches 'chapter*.pdf').
 .EXAMPLE
     Invoke-PdfMerge -File 'chapter'
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. Any standard output emitted by qpdf.
+.NOTES
+    Requires qpdf.exe on PATH. Supports -WhatIf/-Confirm. Searches the
+    current directory and merges in filename sort order, not numeric order.
+    A pre-existing <prefix>-merged.pdf also matches the input search.
 #>
 function Invoke-PdfMerge {
     [CmdletBinding(SupportsShouldProcess)]
@@ -159,14 +200,20 @@ function Invoke-PdfMerge {
 .SYNOPSIS
     List bookmarks (outlines) from a PDF file.
 .DESCRIPTION
-    Uses qpdf's JSON output to extract the page numbers and titles of all
-    bookmark entries (document outlines) in a PDF.
+    Reads qpdf's JSON page data and returns pages whose outline entries have
+    titles. Multiple titles associated with a page remain grouped in Title.
 .PARAMETER File
-    Path to the PDF file to inspect.
+    PDF path. Accepts pipeline strings or objects with File or FullName properties.
 .EXAMPLE
     Get-PdfBookmarks -File 'document.pdf'
 .EXAMPLE
     Get-ChildItem *.pdf | Get-PdfBookmarks
+.INPUTS
+    System.String, or objects with File or FullName properties.
+.OUTPUTS
+    System.Management.Automation.PSCustomObject. One-based Page and Title properties.
+.NOTES
+    Requires qpdf.exe on PATH. Does not modify the PDF.
 #>
 function Get-PdfBookmarks {
     [CmdletBinding()]

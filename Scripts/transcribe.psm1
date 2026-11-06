@@ -10,8 +10,16 @@
 .PARAMETER Path
     Path to the XSC file to read.
 
-.RETURNS
-    A PSCustomObject with properties Version, Transcribe, and Data.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.Management.Automation.PSCustomObject. Version, Transcribe, and
+    ordered Data properties.
+.EXAMPLE
+    $document = Read-Xsc -Path '.\song.xsc'
+.NOTES
+    Keeps Loops, Markers, and TextBlocks lines as raw values under synthetic
+    keys so repeated entries retain their order. Does not modify the file.
 #>
 function Read-Xsc {
     [CmdletBinding()]
@@ -94,6 +102,16 @@ function Read-Xsc {
 
 .PARAMETER XSC
     The object representing the XSC data (from Read-Xsc).
+.INPUTS
+    None. Supply the document through -XSC, not the pipeline.
+.OUTPUTS
+    System.String. Header, section, and value lines; no file is written directly.
+.EXAMPLE
+    $document = Read-Xsc -Path '.\song.xsc'
+    Write-Xsc -XSC $document | Set-Content -LiteralPath '.\song-copy.xsc'
+.NOTES
+    Preserves ordered section/value iteration and emits synthetic-key values
+    as raw lines rather than writing their generated keys.
 #>
 function Write-Xsc {
     [CmdletBinding()]
@@ -131,15 +149,20 @@ function Write-Xsc {
 .SYNOPSIS
     Fix a Transcribe XSC file to my desired default settings.
 .DESCRIPTION
-    This script reads a Transcribe XSC file, modifies some settings to my preferred defaults,
-    and writes the changes back to the file.
-.PARAMETER Path
-    The path to the XSC file to fix.
+    Reads each XSC file, updates its save date, window layout, mono display,
+    navigation/spectrum visibility, splitter position, and zoom settings,
+    then overwrites the original file.
+.PARAMETER File
+    XSC path. Accepts pipeline strings or objects with File, FullName, or Path properties.
+.INPUTS
+    System.String, or objects with File, FullName, or Path properties.
+.OUTPUTS
+    None. Writes progress to the host and failures as warnings.
 .NOTES
-    The XSC file format is meh, so Read-Xsc is a bit weird.
+    Uses Read-Xsc and Write-Xsc. Assumes Main and View0 sections exist.
+    Does not create a backup or support -WhatIf.
 .EXAMPLE
-    . c:\Users\jeffm\.local\bin\FixXsc.ps1
-     Get-ChildItem -File '*.xsc' | Invoke-FixXsc
+    Get-ChildItem -File '*.xsc' | Invoke-FixXsc
 #>
 function Invoke-FixXsc {
     [CmdletBinding()]

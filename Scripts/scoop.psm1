@@ -6,8 +6,7 @@ Check for and install Scoop package updates.
 .DESCRIPTION
 If Scoop is installed, this function updates all packages and performs a
 cleanup. It keeps a timestamp file to avoid running more than once every
-7 days unless `-Force` is specified. Completion support is optionally
-loaded if available.
+7 days unless -Force is specified.
 
 .PARAMETER Force
 Skips the 7‑day frequency check and runs immediately.
@@ -17,6 +16,14 @@ Invoke-ScoopUpdate
 
 .EXAMPLE
 Invoke-ScoopUpdate -Force
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Status and any output from Scoop.
+.NOTES
+Requires scoop.ps1. Normal runs write ~/.scoop-lastcheck before updating;
+-Force bypasses both the frequency check and timestamp write. Cleanup
+removes old package versions. Does not support -WhatIf.
 #>
 function Invoke-ScoopUpdate {
     [CmdletBinding()]
@@ -42,25 +49,45 @@ function Invoke-ScoopUpdate {
 }
 
 
-# .DESCRIPTION
-# Similar to "scoop list", except that it also includes Description and Website.
-#
-# .EXAMPLE
-# Convert output to CSV
-#
-# Invoke-ScoopListInfo `
-# | Select-Object @{Name='App'; Expression={"$($_.Source)/$($_.Name)"}},Version,Description,Website,@{Name='Updated'; Expression={[DateTime]$_.'Updated at'}} `
-# | ConvertTo-Csv `
-# | Out-File -FilePath ./scoop-listinfo.csv -Encoding UTF8
-#
-# .SEE ALSO
-# Invoke-ScoopListInfoMarkdown
-#
-# .NOTES
-# This function is designed to be used with PowerShell 7 or later.
+<#
+.SYNOPSIS
+Returns detailed information about installed Scoop packages.
+.DESCRIPTION
+Lists installed packages while suppressing host output, then runs scoop info
+for each bucket/package in parallel to include descriptions and websites.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.Object. Scoop info records for installed packages.
+.EXAMPLE
+Invoke-ScoopListInfo | Select-Object Name,Version,Description,Website | Export-Csv '.\scoop-listinfo.csv'
+.LINK
+Invoke-ScoopListInfoMarkdown
+.NOTES
+Requires scoop.ps1 and PowerShell 7 parallel pipelines. Temporarily installs
+a global no-op Write-Host function, then removes it rather than restoring
+any pre-existing function override.
+#>
 function Invoke-ScoopListInfo {
     # Suppress "scoop list" Write-Host output by overriding Write-Host
-    function global:Write-Host { }
+
+    <#
+    .SYNOPSIS
+    Suppresses host messages while Scoop lists installed packages.
+    .DESCRIPTION
+    Temporarily shadows Write-Host with a no-op function. All supplied
+    arguments are ignored until Invoke-ScoopListInfo removes the override.
+    .INPUTS
+    None.
+    .OUTPUTS
+    None.
+    .EXAMPLE
+    Write-Host 'This message is suppressed.'
+    .NOTES
+    Global override used only during the enclosing Scoop list operation.
+    #>
+    function global:Write-Host {
+    }
     try {
         $list = scoop.ps1 list
     }
@@ -74,11 +101,21 @@ function Invoke-ScoopListInfo {
     }
 }
 
-# .DESCRIPTION
-# Outputs Scoop package information as Markdown grouped by bucket.
-#
-# .EXAMPLE
-# Invoke-ScoopListInfoMarkdown | Out-File ./scoop-listinfo.md
+<#
+.SYNOPSIS
+Returns installed Scoop package information as a Markdown report.
+.DESCRIPTION
+Calls Invoke-ScoopListInfo, sorts packages by bucket and name, and emits
+dated Markdown headings and linked entries with versions and descriptions.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Markdown report lines.
+.EXAMPLE
+Invoke-ScoopListInfoMarkdown | Out-File '.\scoop-listinfo.md'
+.NOTES
+Requires the Scoop dependencies of Invoke-ScoopListInfo.
+#>
 function Invoke-ScoopListInfoMarkdown {
     '# Scoop List'
     ''

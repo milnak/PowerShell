@@ -15,7 +15,8 @@
 .PARAMETER Extract
     Specifies which resources to extract.
     Valid options: Score, ScoreAndParts, ScoreAudio, Parts.
-    Defaults to: Score, Parts.
+    Defaults to: Score, Parts. ScoreAndParts is accepted but does not have
+    an extraction branch; use Score,Parts to write both.
 
 .PARAMETER MuseScorePath
     Path to the MuseScore executable.
@@ -31,7 +32,13 @@
     'a.mscz','b.mscz' | ConvertFrom-MuseScore -Extract ScoreAndParts
 
 .NOTES
-    Requires MuseScore 4.x or later.
+    Requires the configured MuseScore executable. Writes PDFs and optional
+    MP3 audio in the current directory and uses a temporary JSON file.
+    Existing outputs can be overwritten; does not support -WhatIf.
+.INPUTS
+    System.String, or objects with FullName or Path properties.
+.OUTPUTS
+    None. Writes exported files to disk and progress to the host.
 #>
 function ConvertFrom-MuseScore {
     [CmdletBinding()]
@@ -108,6 +115,25 @@ function ConvertFrom-MuseScore {
     }
 }
 
+<#
+.SYNOPSIS
+    Returns the title and subtitle from compressed MuseScore projects.
+.DESCRIPTION
+    Uses unzip to read the archive member named <project-base-name>.mscx,
+    parses its XML, and extracts title/subtitle text from the first staff.
+.PARAMETER MuseScoreFilePath
+    MSCZ archive path. Accepts pipeline strings or objects with
+    MuseScoreFilePath, FullName, or Path properties.
+.INPUTS
+    System.String, or objects with MuseScoreFilePath, FullName, or Path properties.
+.OUTPUTS
+    System.String. Title and subtitle separated by ' - '.
+.EXAMPLE
+    Get-ChildItem -File '*.mscz' | Export-MuseScoreMetadata
+.NOTES
+    Requires unzip.exe on PATH. The MSCX archive member must share the
+    outer file's base name. Does not write extracted files.
+#>
 function Export-MuseScoreMetadata {
     [CmdletBinding()]
     param(

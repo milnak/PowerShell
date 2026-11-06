@@ -1,6 +1,21 @@
 <#
 .SYNOPSIS
-Start editor.
+Starts an editor for literal paths or wildcard matches.
+.DESCRIPTION
+Collects paths across the pipeline, expands wildcard matches, and launches
+the editor once. Existing literal paths are resolved; nonexistent literal
+paths are passed through so the editor can create files.
+.PARAMETER Path
+One or more paths or wildcard patterns. Accepts pipeline strings or objects
+with Path or FullName properties.
+.PARAMETER EditorCommand
+Application to launch. Defaults to code.cmd.
+.PARAMETER EditorArgs
+Arguments placed before the collected file paths.
+.INPUTS
+System.String, or objects with Path or FullName properties.
+.OUTPUTS
+None. Launches the editor without waiting for it to exit.
 
 .EXAMPLE
 Invoke-Editor -Verbose $PROFILE -EditorCommand micro.exe
@@ -9,6 +24,9 @@ Edit PowerShell $PROFILE file using micro.exe.
 .EXAMPLE
 Invoke-Editor -Path m* -EditorArgs '--new-window'
 Editor with wildcard path using the default editor in a new window.
+.NOTES
+Requires the chosen editor application. Supports -WhatIf/-Confirm for each
+resolved path. No files are opened when all paths are skipped or absent.
 #>
 function Invoke-Editor {
     [CmdletBinding(SupportsShouldProcess)] # Support -Confirm, -WhatIf
@@ -32,6 +50,23 @@ function Invoke-Editor {
     }
 
     process {
+        <#
+        .SYNOPSIS
+        Adds surrounding double quotes to an editor path when needed.
+        .DESCRIPTION
+        Leaves text already enclosed in double quotes unchanged; otherwise
+        wraps it for use in Start-Process's command-line argument string.
+        .PARAMETER InputString
+        Path or argument text to quote.
+        .INPUTS
+        None. This function does not accept pipeline input.
+        .OUTPUTS
+        System.String. The surrounded argument.
+        .EXAMPLE
+        Add-SurroundingQuotes -InputString 'C:\My Files\song.txt'
+        .NOTES
+        Local helper for Invoke-Editor. Does not escape embedded double quotes.
+        #>
         function Add-SurroundingQuotes {
             param ([Parameter(Mandatory = $true)][string]$InputString)
 
@@ -103,10 +138,42 @@ function Invoke-Editor {
     }
 }
 
+<#
+.SYNOPSIS
+Opens paths in Visual Studio Code through Invoke-Editor.
+.DESCRIPTION
+Forwards all positional arguments as Path values to Invoke-Editor, using
+code.cmd without additional editor arguments.
+.INPUTS
+None. Supply paths as arguments, not pipeline input.
+.OUTPUTS
+None. Launches the editor.
+.EXAMPLE
+code '.\song.txt'
+.NOTES
+Requires code.cmd on PATH. This shadows the code launcher and treats all
+arguments as paths, not as arbitrary VS Code command-line options.
+#>
 function code {
     Invoke-Editor -EditorCommand 'code.cmd' -EditorArgs @() -Path $args
 }
 
+<#
+.SYNOPSIS
+Opens paths in Micro through Invoke-Editor.
+.DESCRIPTION
+Forwards all positional arguments as Path values to Invoke-Editor, using
+micro.exe without additional editor arguments.
+.INPUTS
+None. Supply paths as arguments, not pipeline input.
+.OUTPUTS
+None. Launches the editor.
+.EXAMPLE
+micro '.\song.txt'
+.NOTES
+Requires micro.exe on PATH. All arguments are treated as paths rather than
+Micro command-line options.
+#>
 function micro {
     Invoke-Editor -EditorCommand 'micro.exe' -EditorArgs @() -Path $args
 }

@@ -4,22 +4,40 @@
 
 .DESCRIPTION
     Runs ffmpeg's volumedetect filter to determine the peak volume of each
-    input file. If the peak is above 0 dB, computes a gain to normalize the
-    audio and creates a normalized copy. Optionally replaces the original
-    file in-place when the `-InPlace` switch is provided.
+    input file. When the gain needed to reach 0 dB exceeds 1 dB, creates a
+    copy named <name>-normalized<extension> beside the input file. Files
+    requiring 1 dB or less of gain are skipped.
 
-    The function supports the common -WhatIf/-Confirm powershell verbs and
-    requires ffmpeg.exe to be available on the PATH.
+    Supports -WhatIf and -Confirm. With -InPlace, replaces the original
+    after normalization succeeds and removes the temporary backup.
 
-.PARAMETER Path
-    One or more file paths to normalize. Can be piped in or supplied as
-    positional arguments.
+.PARAMETER File
+    Path of a media file to normalize. Accepts pipeline strings or objects
+    with FullName or Path properties. FullName and Path are parameter aliases.
 
 .PARAMETER InPlace
     When present, original files are replaced with the normalized output.
 
+.INPUTS
+    System.String. File paths, or objects with FullName or Path properties.
+
+.OUTPUTS
+    System.String. Gain summaries, or ffmpeg diagnostics when processing fails.
+
 .EXAMPLE
     Get-ChildItem '*.mp3' | Invoke-Normalize -InPlace
+
+    Normalizes eligible MP3 files and replaces their originals.
+
+.EXAMPLE
+    Invoke-Normalize -File '.\track.flac' -WhatIf
+
+    Previews normalization without running ffmpeg or changing files.
+
+.NOTES
+    Requires ffmpeg.exe on PATH, including for -WhatIf. Existing normalized
+    output files are overwritten. In-place processing temporarily renames
+    the source with a -bak suffix after encoding succeeds.
 #>
 function Invoke-Normalize {
     # Support -Confirm (ShouldProcess), -WhatIf
@@ -171,16 +189,37 @@ function Invoke-Normalize {
     Scans a directory recursively for MP3 and FLAC files and extracts metadata
     (artist, album, title, year, genre, track, bitrate, duration, size) using
     ffprobe. Returns grouped objects by default, or a full HTML report when
-    -HtmlOutput is specified.
+    -HtmlOutput is specified. Files are sorted by track number and grouped
+    by directory. The HTML report includes file count, duration, and size totals.
+
 .PARAMETER Path
     Directory to scan for audio files.
+
 .PARAMETER HtmlOutput
     When present, outputs a self-contained HTML report string instead of
-    grouped PSCustomObjects.
+    directory groups containing media metadata objects.
+
+.INPUTS
+    None. This function does not accept pipeline input.
+
+.OUTPUTS
+    Microsoft.PowerShell.Commands.GroupInfo. Directory groups containing metadata.
+    System.String. An HTML report when HtmlOutput is specified.
+
 .EXAMPLE
     Convert-MediaInfoToHtml -Path 'D:\Music\Album' | Format-Table
+
+    Displays the directory groups for the scanned audio files.
+
 .EXAMPLE
     Convert-MediaInfoToHtml -Path 'D:\Music' -HtmlOutput | Set-Content report.html
+
+    Saves the recursive music library report as HTML.
+
+.NOTES
+    Requires ffprobe.exe on PATH. Metadata values are inserted into HTML as-is,
+    without escaping. Only MP3 and FLAC files are included; output is returned
+    to the pipeline rather than saved to a report file.
 #>
 function Convert-MediaInfoToHtml {
     [CmdletBinding()]
@@ -197,6 +236,29 @@ function Convert-MediaInfoToHtml {
     }
 
     process {
+        <#
+        .SYNOPSIS
+            Formats a byte count for the media report.
+
+        .DESCRIPTION
+            Selects GB, MB, KB, or B using PowerShell's binary size thresholds.
+            Values in GB, MB, and KB use one decimal place and the current culture.
+
+        .PARAMETER Bytes
+            Number of bytes to format. Values below 1 KB, including negative
+            values, are returned with a B suffix without scaling.
+
+        .INPUTS
+            None. This function does not accept pipeline input.
+
+        .OUTPUTS
+            System.String. The byte count with a size suffix.
+
+        .EXAMPLE
+            Format-Size -Bytes 1536
+
+            Returns 1.5 KB when the current culture uses a decimal point.
+        #>
         function Format-Size {
             param(
                 [Parameter(Mandatory)][double]$Bytes
@@ -329,10 +391,37 @@ $totalRow
 
 
 <#
+.SYNOPSIS
+    Converts media files to variable-bitrate MP3 audio.
+
 .DESCRIPTION
-    Wraps ffmpeg.exe to encode an input file to MP3 with variable bitrate
-    quality settings. Supports pipeline input of file names and optional
-    output filename specification.
+    Uses ffmpeg's libmp3lame encoder with a quality level from 0 to 9.
+    Video is excluded. By default, writes <name>.mp3 in the current directory.
+    Supports -WhatIf and -Confirm.
+
+.PARAMETER Quality
+    Variable-bitrate quality level from 0 to 9. Lower values mean higher
+    quality. Defaults to 2, approximately 190 kbit/s on average.
+
+.PARAMETER InputFile
+    Source media file path. Accepts pipeline objects with an InputFile or
+    FullName property, such as FileInfo objects from Get-ChildItem. FullName
+    is also a parameter alias; bare strings are not bound from the pipeline.
+
+.PARAMETER OutputFile
+    Destination path with a .mp3 extension. Defaults to the input base name
+    with a .mp3 extension in the current directory.
+
+.PARAMETER Force
+    Overwrites existing output without an ffmpeg overwrite prompt.
+
+.INPUTS
+    System.IO.FileInfo, or objects with InputFile or FullName properties.
+
+.OUTPUTS
+    System.String. Conversion messages and a count of processed inputs,
+    including inputs skipped by -WhatIf or -Confirm.
+
 .EXAMPLE
     ConvertTo-Mp3 -InputFile '.\track.flac'
 
@@ -347,14 +436,10 @@ $totalRow
 
     Converts all WAV files in the current directory to MP3 using pipeline
     input and a lower bitrate setting.
-.PARAMETER Quality
-    Numeric quality level (0–9) controlling bitrate; lower is higher quality.
-.PARAMETER InputFile
-    Path of the source file to convert. Can be piped in.
-.PARAMETER OutputFile
-    Destination MP3 file; if omitted, derived from input name.
-.PARAMETER Force
-    Overwrite existing output without prompting.
+
+.NOTES
+    Requires ffmpeg.exe on PATH with the libmp3lame encoder, including during
+    -WhatIf. An explicit OutputFile is reused for every pipeline input.
 #>
 function ConvertTo-Mp3 {
     [CmdletBinding(SupportsShouldProcess)]
@@ -433,17 +518,17 @@ function ConvertTo-Mp3 {
 
 <#
 .SYNOPSIS
-    Combines multiple audio files into a single multi-track Ogg Vorbis file.
+    Combines audio files into a multi-track file with a .mogg extension.
 
 .DESCRIPTION
     Accepts one or more audio files via the pipeline and encodes them as
-    separate audio tracks in a single Ogg Vorbis (.ogg) container using
-    ffmpeg. Each track is encoded with the libvorbis codec and labeled with
-    the source file's base name as its track title metadata.
+    separate audio streams using ffmpeg and the libvorbis codec. Each stream
+    is labeled with the source file's base name as its title metadata. The
+    destination is named <OggFile>.mogg. Supports -WhatIf and -Confirm.
 
 .PARAMETER File
-    One or more paths to input audio files. Accepts pipeline input, including
-    objects with FullName or Path properties (e.g. from Get-ChildItem).
+    Path of one input audio file. Pipe multiple paths or objects with FullName
+    or Path properties to collect several files. FullName and Path are aliases.
 
 .PARAMETER OggFile
     Base name (without extension) of the output .mogg file. The .mogg extension
@@ -453,15 +538,26 @@ function ConvertTo-Mp3 {
     Overwrite the output file if it already exists. Without this switch,
     ffmpeg will fail if the destination file is present.
 
+.INPUTS
+    System.String. File paths, or objects with FullName or Path properties.
+
+.OUTPUTS
+    System.String. A creation summary when ffmpeg succeeds.
+
 .EXAMPLE
     Get-ChildItem -File 'Bertha - *.mp3' | ConvertTo-MultitrackOgg -OggFile 'out'
 
-    Combines all matching MP3 files into out.ogg, each as a separate audio track.
+    Combines all matching MP3 files into out.mogg as separate audio streams.
 
 .EXAMPLE
-    ConvertTo-MultitrackOgg -File 'left.flac', 'right.flac' -OggFile 'stereo-pair'
+    'left.flac', 'right.flac' | ConvertTo-MultitrackOgg -OggFile 'stereo-pair'
 
-    Combines two FLAC files into stereo-pair.ogg with two audio tracks.
+    Combines two FLAC files into stereo-pair.mogg with separate audio streams.
+
+.NOTES
+    Requires ffmpeg.exe on PATH with the libvorbis encoder and a build that
+    recognizes the .mogg extension; the command does not specify an output format.
+    Collects and resolves all inputs before checking ShouldProcess in end.
 #>
 function ConvertTo-MultitrackOgg {
     [CmdletBinding(SupportsShouldProcess)]
@@ -551,21 +647,42 @@ function ConvertTo-MultitrackOgg {
 }
 
 <#
+.SYNOPSIS
+    Mixes vocal and instrumental stems with reduced vocal volume.
+
 .DESCRIPTION
-Merge UVR5 split stems into single file, with reduced vocal file volume.
+    Uses ffmpeg to reduce the vocal stem to 15 percent of its original
+    amplitude and mix it with the instrumental stem. Mix normalization is
+    disabled. Intended for stems produced by UVR5; defaults to MP3 output.
 
 .PARAMETER VocalsFile
-The vocal file, split using UVR5.
+    Path of the vocal stem.
+
 .PARAMETER InstrumentalFile
-The instrumental file, split using UVR5.
+    Path of the instrumental stem.
+
 .PARAMETER OutputFile
-The file to write the merged output to.
+    Destination file path. Defaults to stems-merged.mp3 in the current
+    directory. ffmpeg infers the output format from the extension.
+
 .PARAMETER Force
-Force overwrite of the output file if it exists.
+    Overwrites an existing output file without prompting.
+
+.INPUTS
+    None. This function does not accept pipeline input.
+
+.OUTPUTS
+    System.String. A creation message when ffmpeg succeeds.
 
 .EXAMPLE
-Convert-StemsToMp3 -VocalsFile "vocals.wav" -InstrumentalFile "instrumental.wav" -OutputFile "merged.mp3"
-This command merges the specified vocal and instrumental files into a single MP3 file with reduced vocal volume.
+    Convert-StemsToMp3 -VocalsFile 'vocals.wav' -InstrumentalFile 'instrumental.wav' -OutputFile 'merged.mp3'
+
+    Creates merged.mp3 with reduced vocal volume and the instrumental stem.
+
+.NOTES
+    Requires ffmpeg.exe on PATH. Does not support -WhatIf or -Confirm.
+    Input paths are passed directly to ffmpeg; the output extension selects
+    the container, so OutputFile is not restricted to MP3.
 #>
 function Convert-StemsToMp3 {
     param(
@@ -621,7 +738,41 @@ function Convert-StemsToMp3 {
 
 <#
 .SYNOPSIS
-Use ffmpeg to convert video files to GIF format.
+    Converts video files to looping animated GIFs.
+
+.DESCRIPTION
+    Uses ffmpeg to generate a palette and convert video to a GIF at 10 frames
+    per second and 240 pixels high, preserving the aspect ratio. The GIF
+    loops indefinitely and is saved beside the source with .gif appended
+    to its full name, such as clip.mp4.gif. Supports -WhatIf and -Confirm.
+
+.PARAMETER File
+    Source video path. Accepts pipeline strings or objects with FullName or
+    Path properties. FullName and Path are parameter aliases.
+
+.PARAMETER Force
+    Overwrites an existing GIF without prompting. Without this switch,
+    ffmpeg fails if the destination exists.
+
+.INPUTS
+    System.String. File paths, or objects with FullName or Path properties.
+
+.OUTPUTS
+    System.String. A creation message for each successful conversion.
+
+.EXAMPLE
+    ConvertTo-Gif -File '.\clip.mp4'
+
+    Creates clip.mp4.gif beside the source video.
+
+.EXAMPLE
+    Get-ChildItem '.\*.mp4' -File | ConvertTo-Gif -Force
+
+    Converts matching videos and overwrites their existing GIF outputs.
+
+.NOTES
+    Requires ffmpeg.exe on PATH, including during -WhatIf. Resolves literal
+    source paths before checking ShouldProcess.
 #>
 function ConvertTo-Gif {
     [CmdletBinding(SupportsShouldProcess)]
@@ -685,7 +836,46 @@ function ConvertTo-Gif {
     }
 }
 
-function ConvertTo-PitchShift {
+<#
+.SYNOPSIS
+    Shifts audio pitch by semitones or between musical keys.
+
+.PARAMETER SourceFile
+    Source media file path.
+
+.PARAMETER TargetFile
+    Destination file path. ffmpeg infers the output format from its extension.
+
+.PARAMETER Force
+    Overwrites an existing destination without prompting.
+
+.PARAMETER Semitones
+    Signed number of semitones to shift. Positive values raise the pitch;
+    negative values lower it. Cannot be combined with SourceKey or TargetKey.
+
+.PARAMETER SourceKey
+    Original key as a natural note, sharp, or flat, such as C, F#, or Bb.
+    Required with TargetKey instead of Semitones.
+
+.PARAMETER TargetKey
+    Desired key as a natural note, sharp, or flat. Required with SourceKey.
+    Enharmonic equivalents, such as C# and Db, map to the same pitch.
+
+.EXAMPLE
+    Invoke-PitchShift -SourceFile '.\song.mp3' -TargetFile '.\song-lower.mp3' -Semitones -2
+
+    Lowers the pitch by two semitones with tempo compensation.
+
+.EXAMPLE
+    Invoke-PitchShift -SourceFile '.\song.flac' -TargetFile '.\song-in-d.flac' -SourceKey C -TargetKey D -Force
+
+    Raises the pitch from C to D and overwrites an existing destination.
+
+.NOTES
+    Requires ffprobe.exe and ffmpeg.exe on PATH. Does not support -WhatIf
+    or -Confirm. Large shifts are subject to ffmpeg's audio filter limits.
+#>
+function Invoke-PitchShift {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -696,7 +886,7 @@ function ConvertTo-PitchShift {
 
         [switch]$Force,
 
-        [Parameter(Mandatory, PArameterSetName = 'Semitones')]
+        [Parameter(Mandatory, ParameterSetName = 'Semitones')]
         [int]$Semitones,
 
         [Parameter(Mandatory, ParameterSetName = 'Keys')]
@@ -722,21 +912,30 @@ function ConvertTo-PitchShift {
 
         # Distance in semitones from "C".
         $notePositions = @{
-            'C' = 0; 'C#' = 1; 'Db' = 1
-            'D' = 2; 'D#' = 3; 'Eb' = 3
+            'C' = 0
+            'C#' = 1; 'Db' = 1
+            'D' = 2
+            'D#' = 3; 'Eb' = 3
             'E' = 4
-            'F' = 5; 'F#' = 6; 'Gb' = 6
-            'G' = 7; 'G#' = 8; 'Ab' = 8
-            'A' = 9; 'A#' = 10; 'Bb' = 10
-            'B' = 11;
+            'F' = 5
+            'F#' = 6; 'Gb' = 6
+            'G' = 7
+            'G#' = 8; 'Ab' = 8
+            'A' = 9
+            'A#' = 10; 'Bb' = 10
+            'B' = 11
         }
 
+        # Returns difference within -6 to 6 semitones.
+        #                 / semitones + 12, semitones < -6,
+        # f(semitones) = |  semitones,      -6 <= semitones <= 6
+        #                 \ semitones - 12, semitones > 6,
         $semitones = $notePositions[$TargetKey] - $notePositions[$SourceKey]
-        if ($semitones -gt 6) {
-            return $semitones - 12
+        if ($semitones -lt -6) {
+            $semitones += 12
         }
-        elseif ($semitones -lt -6) {
-            return $semitones + 12
+        elseif ($semitones -gt 6) {
+            $semitones -= 12
         }
         return $semitones
     }
@@ -760,7 +959,7 @@ function ConvertTo-PitchShift {
         '-hide_banner',
         '-v', 'error',
         '-show_entries', 'stream=index,sample_rate',
-        '-of', 'json'
+        '-of', 'json',
         $SourceFile
     )
     $ffprobeOutput = ffprobe.exe @ffprobe_args | ConvertFrom-Json
@@ -775,11 +974,6 @@ function ConvertTo-PitchShift {
         return
     }
     $sample_rate = $sample_rate[0].sample_rate
-
-    # Example:
-    # Semitones (n): -3
-    # PITCH_RATIO: 2 ^(-3/12) = 2 ^ (0.25) = 0.8409
-    # Tempo Correction = (1 / PITCH_RATIO): 1/0.8409 = 1.1892
 
     [float]$PITCH_RATIO = [math]::Pow(2, $Semitones / 12)
     [float]$TEMPO_CORRECTION = 1 / $PITCH_RATIO
@@ -816,5 +1010,5 @@ Export-ModuleMember -Function `
     ConvertTo-Mp3, `
     ConvertTo-MultitrackOgg, `
     Invoke-Normalize, `
-    ConvertTo-PitchShift, `
+    Invoke-PitchShift, `
     Get-Semitones

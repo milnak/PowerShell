@@ -8,6 +8,12 @@
     The text to show in the box; line breaks are supported.
 .PARAMETER ColorCode
     ANSI color code (30–37) used for the box border.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None. Writes the colored box to the host.
+.EXAMPLE
+    Write-BoxedMessage -Message "First line`nSecond line" -ColorCode 36
 #>
 function Write-BoxedMessage {
     Param(
@@ -43,6 +49,15 @@ function Write-BoxedMessage {
     Maximum width passed to figlet.
 .PARAMETER FontName
     Figlet font name to use.
+.INPUTS
+    System.String. One or more text lines.
+.OUTPUTS
+    System.String. Prefixed figlet output and a trailing comment-only line
+    for each input string.
+.EXAMPLE
+    'Utilities' | Write-Figlet -FontName small -CommentIndicator '# '
+.NOTES
+    Requires figlet.exe on PATH and the selected figlet font.
 #>
 function Write-Figlet {
     [CmdletBinding()]
@@ -81,6 +96,15 @@ function Write-Figlet {
     formatting. Non-alphanumeric characters are preserved when possible.
 .PARAMETER Message
     Strings to convert; supports pipeline input.
+.INPUTS
+    System.String. Text to transform.
+.OUTPUTS
+    System.String. Text with mapped letters, digits, and selected punctuation.
+.EXAMPLE
+    'Example 123' | Write-Bold
+.NOTES
+    Produces Unicode characters, not ANSI bold styling. Unmapped characters
+    are unchanged, and display depends on the terminal font.
 #>
 function Write-Bold {
     [CmdletBinding()]
@@ -183,16 +207,39 @@ function Write-Bold {
 }
 
 <#
-.EXAMPLES
+.SYNOPSIS
+    Writes text using a cycling RGB foreground color.
+.DESCRIPTION
+    Reads existing file paths or text from the pipeline and writes each line
+    to the host with an ANSI true-color sequence. A shared counter keeps
+    colors and optional line numbers continuous across pipeline items.
+.PARAMETER InputObject
+    Text, a literal existing file path, or another object convertible to text.
+    Null and empty strings are allowed. Accepts values or InputObject properties.
+.PARAMETER Frequency
+    Sine-wave frequency controlling how quickly colors cycle. Defaults to 0.3.
+.PARAMETER NumberLines
+    Prefix each displayed line with a right-aligned, one-based line number.
+.INPUTS
+    System.Object. File paths or values to render as text.
+.OUTPUTS
+    None. Writes colored text to the host.
+.EXAMPLE
 Get-Content '.\vcpkg.json','.\Directory.Build.props' | Get-ContentWithRainbow
 
+.EXAMPLE
 Get-Content '.\vcpkg.json' | Get-ContentWithRainbow -NumberLines
 
+.EXAMPLE
 Get-ChildItem | Get-ContentWithRainbow -Frequency 0.5
 
+.EXAMPLE
 "1`n2`n3`n4`n5`n6`n7`n8`n9" | Get-ContentWithRainbow -NumberLines
 
+.EXAMPLE
 1..20 | Get-ContentWithRainbow -NumberLines
+.NOTES
+    Requires an ANSI true-color terminal for the intended display.
 #>
 function Get-ContentWithRainbow {
     [CmdletBinding()]
@@ -208,6 +255,24 @@ function Get-ContentWithRainbow {
         $lineCounter = 1
     }
     process {
+        <#
+        .SYNOPSIS
+        Calculates RGB components for a position in the rainbow cycle.
+        .DESCRIPTION
+        Uses three phase-shifted sine waves to produce integer color components.
+        .PARAMETER Freq
+        Frequency multiplier controlling the color-cycle speed.
+        .PARAMETER I
+        Position in the sequence, normally the current line number.
+        .INPUTS
+        None. This function does not accept pipeline input.
+        .OUTPUTS
+        System.Collections.Hashtable. Red, Green, and Blue components.
+        .EXAMPLE
+        Get-RainbowColor -Freq 0.3 -I 1
+        .NOTES
+        Local helper for Get-ContentWithRainbow.
+        #>
         function Get-RainbowColor {
             param(
                 [double]$Freq,

@@ -1,8 +1,13 @@
 <#
 .SYNOPSIS
     Download best quality video and audio into default container.
+.DESCRIPTION
+    Runs yt-dlp for one media URL, embedding metadata and thumbnails. Audio
+    mode extracts the selected format; video mode selects video and audio.
+    URLs containing list= prompt for confirmation and use playlist folders.
 .NOTES
-    yt-dlp now supports preset aliases: '-f mp3', '-f aac', '-t mp4', '-t mkv'
+    Requires yt-dlp.exe on PATH and any post-processing tools it needs,
+    such as ffmpeg. Uses ~/cookies.txt when present and ignores yt-dlp config.
 .PARAMETER Audio
     Download audio only. Requires -Format.
 .PARAMETER Video
@@ -11,6 +16,12 @@
     URL of the media to download.
 .PARAMETER Format
     Audio format to extract when using -Audio (e.g. mp3, flac, wav).
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None. yt-dlp runs in the current console; a nonzero exit code throws.
+.EXAMPLE
+    Invoke-YtDlp -Audio -Format mp3 -Uri 'https://www.youtube.com/watch?v=VIDEO_ID'
 #>
 function Invoke-YtDlp {
     [CmdletBinding()]
@@ -121,6 +132,13 @@ function Invoke-YtDlp {
     Invoke-Aria -Source 'https://example.com/file.zip'
 .EXAMPLE
     Invoke-Aria -Source 'magnet:?xt=urn:btih:...'
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None. aria2c writes progress to the console.
+.NOTES
+    Requires aria2c.exe on PATH. Writes downloads in the current directory,
+    resumes partial downloads, and disables seeding after completion.
 #>
 function Invoke-Aria {
     [CmdletBinding()]
@@ -176,10 +194,15 @@ function Invoke-Aria {
 
 <#
 .SYNOPSIS
-Downloads a webpage (and its requisites) into a timestamped folder using wget.
+Downloads a website and selected linked resources using wget.
 
-.PARAMETER Domain
-The domain name to download, e.g. "example.com".
+.DESCRIPTION
+Recursively downloads accepted file types and page requisites, resumes
+partial files, and converts links for local use. Limits domains to the URL
+host and excludes googleapis.com and youtube.com.
+
+.PARAMETER Url
+Absolute URL of the page or site to download.
 
 .PARAMETER WgetCommand
 Path or name of the wget executable. Defaults to "wget.exe".
@@ -188,7 +211,18 @@ Path or name of the wget executable. Defaults to "wget.exe".
 Get-WebPage -Url 'https://freebasstranscriptions.com/transcriptions/'
 
 .EXAMPLE
-Get-WebPage -Url "mysite.org" -WgetCommand "C:\Tools\wget.exe"
+Get-WebPage -Url 'https://example.com' -WgetCommand 'C:\Tools\wget.exe'
+
+.INPUTS
+None. This function does not accept pipeline input.
+
+.OUTPUTS
+System.String. Any standard output produced by wget.
+
+.NOTES
+Requires wget.exe or the executable selected by WgetCommand. The function
+pushes the caller-supplied $TargetPath onto the location stack and does not
+pop it. It does not create a timestamped destination itself.
 #>
 
 function Get-WebPage {
@@ -243,6 +277,24 @@ function Get-WebPage {
 <#
 .SYNOPSIS
 Download binaries by extension from a web page.
+.DESCRIPTION
+Recursively downloads matching extensions with wget, keeping existing
+timestamps and resuming partial files without ascending to parent URLs.
+.PARAMETER Uri
+Absolute URL at which to start downloading.
+.PARAMETER Extensions
+Accepted extensions without leading dots. Defaults to common web, document,
+media, archive, and executable extensions.
+.PARAMETER Depth
+Maximum recursion depth. Defaults to 1; 0 means unlimited recursion.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Any standard output produced by wget.
+.EXAMPLE
+Get-WebPageBinaries -Uri 'https://example.com/files/' -Extensions pdf,zip -Depth 2
+.NOTES
+Requires wget.exe on PATH. Downloads into the current directory.
 #>
 function Get-WebPageBinaries {
     [CmdletBinding()]
@@ -285,6 +337,13 @@ function Get-WebPageBinaries {
     Destination directory where the MSI will be saved. Must already exist.
 .EXAMPLE
     Invoke-DownloadLatestPS -Folder 'C:\Downloads'
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. The download URL prefixed with Downloading:.
+.NOTES
+    Requires internet access to GitHub. Downloads the Windows x64 MSI
+    regardless of the current processor architecture; does not install it.
 #>
 function Invoke-DownloadLatestPS {
     [CmdletBinding()]
@@ -322,8 +381,18 @@ function Invoke-DownloadLatestPS {
     Install the latest PowerShell release for the current architecture.
 .DESCRIPTION
     Queries the PowerShell metadata API to determine the latest release version,
-    compares it to the running version, and silently downloads and launches the
-    MSI installer if an update is available.
+    compares it to the running version, and downloads and launches the MSI
+    installer in passive mode if an update is available.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None. Status is written to the host.
+.EXAMPLE
+    Update-PowerShell
+.NOTES
+    Supports AMD64 and x86 process architectures. Requires internet access
+    and msiexec.exe. Writes the installer to $env:tmp and leaves it there.
+    Installation can require elevation; this command has no -WhatIf support.
 #>
 function Update-PowerShell {
     [CmdletBinding()]
@@ -368,12 +437,20 @@ function Update-PowerShell {
     Download and flatten English subtitles into a plain text transcript.
 .DESCRIPTION
     Uses yt-dlp to fetch English subtitles (manual or automatic), converts them
-    to SRT, removes duplicate/metadata lines, and writes a single text file
-    named after the video title.
+    to SRT, removes consecutive duplicate lines, sequence numbers, timestamps,
+    and blank lines, and returns a single plain-text transcript per URL.
 .PARAMETER Uri
-    URL of the media to process.
+    Media URL or ID. Accepts pipeline strings or objects with a Uri property.
 .EXAMPLE
     yt-dlp.exe --flat-playlist --get-id 'https://www.youtube.com/playlist?list=PLh-aFbHYodb5ri0UV3saSh9JFyuBE8W6q' | Invoke-YtDlpSubtitles
+.INPUTS
+    System.String, or objects with a Uri property.
+.OUTPUTS
+    System.String. Subtitle text joined with spaces.
+.NOTES
+    Requires yt-dlp.exe and subtitle-conversion dependencies on PATH.
+    Uses output.en.srt in the current directory and deletes it after reading;
+    do not run concurrently in the same directory or reuse that filename.
 #>
 function Invoke-YtDlpSubtitles {
     [CmdletBinding()]

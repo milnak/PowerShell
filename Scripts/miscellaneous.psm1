@@ -4,10 +4,22 @@
 .SYNOPSIS
     Display a table of console colors.
 .DESCRIPTION
-    Shows combinations of foreground and background ConsoleColor values.
-    Use -ShowAll to iterate over all colors; otherwise a curated subset is shown.
-.PARAMETER ShowAll
-    Display every possible color value, not just the reduced palette.
+    Displays all ConsoleColor foreground/background combinations, a compact
+    gYw sample palette, or the terminal's standard and bright foreground colors.
+.PARAMETER All
+    Display all foreground/background ConsoleColor combinations.
+.PARAMETER gYw
+    Display gYw samples over a curated background palette.
+.PARAMETER Terminal
+    Display the standard and bright terminal foreground-color pairs.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None. Writes color samples to the host.
+.EXAMPLE
+    Show-ColorTable -All
+.EXAMPLE
+    Show-ColorTable -Terminal
 #>
 function Show-ColorTable {
     [CmdletBinding(DefaultParameterSetName = 'ShowAll')]
@@ -85,6 +97,15 @@ function Show-ColorTable {
     SSH username.
 .PARAMETER Hostname
     Remote host address or name.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. Source/destination summaries and native rsync output.
+.EXAMPLE
+    Invoke-RSync -Source 'C:\Music' -Destination '/backup/music' -User backup -Hostname server
+.NOTES
+    Requires Scoop's cwrsync package and SSH access to the remote host.
+    Recursively copies files; it does not request deletion of remote extras.
 #>
 function Invoke-RSync {
     param(
@@ -121,6 +142,13 @@ function Invoke-RSync {
     Retrieve metadata from JJazzLab .sng files in the current directory.
 .DESCRIPTION
     Parses each .sng XML file and outputs selected song metadata properties.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.Management.Automation.PSCustomObject. BaseName, spName, spTempo,
+    and spComments properties from each song.
+.EXAMPLE
+    Get-JJazzLabMeta | Format-Table
 #>
 function Get-JJazzLabMeta {
     foreach ($file in (Get-ChildItem -File '*.sng')) {
@@ -136,12 +164,22 @@ function Get-JJazzLabMeta {
 .SYNOPSIS
     Create a backup archive using 7-Zip.
 .DESCRIPTION
-    Uses 7z.exe to recursively add files from a source path into a
-    timestamped archive with certain performance-focused options.
+    Builds a recursive 7-Zip backup command with minimum compression,
+    non-solid mode, 4 GB volumes, and exclusions for selected system folders.
+    Invokes Start-Process with inherited -WhatIf/-Confirm preferences.
 .PARAMETER SourcePath
     Root directory to back up.
 .PARAMETER DestinationPath
     Directory where the archive will be created (default: current folder).
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None. 7-Zip writes progress to the console.
+.EXAMPLE
+    Invoke-7zBackup -SourcePath 'C:\Data' -DestinationPath 'D:\Backups' -WhatIf
+.NOTES
+    Requires 7z.exe on PATH. The current argument list passes the archive-name
+    expression literally instead of expanding the intended date-based path.
 #>
 function Invoke-7zBackup {
     [CmdletBinding(SupportsShouldProcess)]
@@ -193,6 +231,16 @@ function Invoke-7zBackup {
     profile location automatically.
 .PARAMETER Force
     Force download even if the local file appears current.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None. Writes progress and status to the host.
+.EXAMPLE
+    Update-IpFilter -Force -WhatIf
+.NOTES
+    Supports -WhatIf/-Confirm for replacing the filter. Without -Force,
+    performs an HTTP HEAD request before ShouldProcess. Writes and expands
+    a temporary ZIP in the detected qBittorrent profile directory.
 #>
 function Update-IpFilter {
     [CmdletBinding(SupportsShouldProcess)]
@@ -259,10 +307,19 @@ function Update-IpFilter {
 .SYNOPSIS
     Format a PowerShell script file using PowerShell-Beautifier.
 .DESCRIPTION
-    Installs the PowerShell-Beautifier module if needed and runs
+    Calls Install-Module for PowerShell-Beautifier on every invocation and runs
     Edit-DTWBeautifyScript with four-space indentation.
 .PARAMETER Path
-    Path to the script to format.
+    Literal path to the script to rewrite.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    Any output emitted by Install-Module or Edit-DTWBeautifyScript.
+.EXAMPLE
+    Format-PowerShell -Path '.\Scripts\messages.psm1'
+.NOTES
+    Can contact the configured module repository and prompt for installation.
+    Formats the source file in place; does not support -WhatIf.
 #>
 function Format-PowerShell {
     # .DESCRIPTION
@@ -281,7 +338,16 @@ function Format-PowerShell {
     Parses the query string of the given URI and returns the original URL
     and data parameters in a PSCustomObject.
 .PARAMETER Uri
-    The SafeLink URI to decode.
+    SafeLink URI to decode. Accepts URI values or strings from the pipeline.
+.INPUTS
+    System.Uri, or URI strings.
+.OUTPUTS
+    System.Management.Automation.PSCustomObject. Host, decoded Uri, and Data
+    properties. Returns nothing when the input has no query string.
+.EXAMPLE
+    Convert-SafeLink -Uri 'https://example.com/?url=https%3A%2F%2Fexample.org&data=value'
+.NOTES
+    Decodes query values locally; does not navigate to or validate the target.
 #>
 function Convert-SafeLink {
     [CmdletBinding()]
@@ -306,6 +372,15 @@ function Convert-SafeLink {
 <#
 .SYNOPSIS
     Push the profile directory onto the location stack.
+.DESCRIPTION
+    Changes to the directory containing the current host's $PROFILE file.
+    The prior location can be restored with Pop-Location.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    None.
+.EXAMPLE
+    Push-ProfileLocation
 #>
 function Push-ProfileLocation {
     Push-Location -LiteralPath (Split-Path -LiteralPath $PROFILE)
@@ -314,10 +389,17 @@ function Push-ProfileLocation {
 <#
 .SYNOPSIS
 Generates a GUID in various C/C++/Registry/Attribute formats.
+.DESCRIPTION
+Creates a fresh GUID and renders it as an OLE macro, DEFINE_GUID macro,
+GUID structure, braced registry value, or language attribute.
 
 .PARAMETER Type
 Specifies the output format:
 Ole, Define, Struct, Registry, AttributeBracket, AttributeBrace
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. A formatted GUID or code template with placeholder names.
 
 .EXAMPLE
 New-GuidFormat Ole
@@ -333,6 +415,21 @@ function New-GuidFormat {
         [string]$Type
     )
 
+    <#
+    .SYNOPSIS
+    Creates a GUID with its component fields available as strings.
+    .DESCRIPTION
+    Splits a fresh GUID into the fields needed by C/C++ GUID initializers.
+    .INPUTS
+    None. This function does not accept pipeline input.
+    .OUTPUTS
+    System.Management.Automation.PSCustomObject. Guid, Data1, Data2, Data3,
+    and Data4_1 through Data4_8 properties.
+    .EXAMPLE
+    $parts = New-GuidObject
+    .NOTES
+    Local helper for New-GuidFormat; each call generates a new identifier.
+    #>
     function New-GuidObject {
         $guid = (New-Guid).Guid
         $m = Select-String `
@@ -398,12 +495,13 @@ function New-GuidFormat {
 .SYNOPSIS
     Convert Ultimate Guitar-style chord/lyric pairs into ChordPro format.
 .DESCRIPTION
-    Reads text lines from the pipeline in alternating pairs:
-    chord line, then lyric line. Non-whitespace chord tokens are inserted into
-    the lyric line at matching column positions using ChordPro tags, e.g. [G].
-.PARAMETER InputObject
-    Input text from the pipeline. Each incoming object is treated as one line.
-    Multi-line strings are split into individual lines.
+    Reads the clipboard as text, removes blank lines, and processes alternating
+    chord and lyric lines. Inserts non-whitespace chord tokens into each lyric
+    line at their original column positions using ChordPro tags such as [G].
+.INPUTS
+    None. Text is read from the clipboard, not the pipeline.
+.OUTPUTS
+    System.String. One ChordPro lyric line per chord/lyric pair.
 
 .EXAMPLE
              A
@@ -417,7 +515,11 @@ function New-GuidFormat {
               A
     I was the last one you thought you'd see there
 
+    # Copy alternating chord and lyric lines to the clipboard first.
     Convert-UltimateGuitarToChopro
+.NOTES
+    Requires Get-Clipboard. An odd number of nonblank lines reports an error
+    to the host and produces no converted lines.
 #>
 function Convert-UltimateGuitarToChopro {
     [CmdletBinding()]
@@ -495,11 +597,18 @@ function Convert-UltimateGuitarToChopro {
 .PARAMETER File
     Path to a ChordPro file. Accepts paths and FileInfo objects from the pipeline.
 .PARAMETER Style
-    ChordPro configuration style to use. The default is modern2.
+    ChordPro configuration style to use. The default is modern3.
 .PARAMETER NoChords
     Generate lyrics-only output by passing --lyrics-only to chordpro.exe.
 .EXAMPLE
     Get-ChildItem '*.cho' | Convert-ChordProToPdf -Style modern3 -NoChords -Verbose
+.INPUTS
+    System.String, or objects with FullName or Path properties.
+.OUTPUTS
+    System.String. Any standard output emitted by chordpro.exe.
+.NOTES
+    Requires chordpro.exe on PATH. Supports -WhatIf/-Confirm. Uses letter
+    paper, strict parsing, and no chord diagrams; output is <base-name>.pdf.
 #>
 function Convert-ChordProToPdf {
     [CmdletBinding(SupportsShouldProcess)]
@@ -561,15 +670,25 @@ function Convert-ChordProToPdf {
     Copies the MobileSheets LocalState content directory to a dated folder
     on an rclone remote.
     Supports WhatIf/Confirm, validates source and rclone availability, and
-    returns a structured summary object after completion.
+    reports completion and elapsed time to the host.
 .PARAMETER ContentDirectory
-    MobileSheets content folder to back up.
+    MobileSheets content folder to back up. Defaults to the installed app's
+    LocalState directory under $env:LocalAppData.
 .PARAMETER RemoteName
-    Name of the configured rclone remote.
+    Name of the configured rclone remote. Defaults to gdrive.
 .PARAMETER RemoteBasePath
-    Base path on the remote where dated backups are stored.
+    Base path on the remote where dated backups are stored. Defaults to
+    MobileSheets_Backup; a yyyy-MM-dd subdirectory is appended.
 .EXAMPLE
     Invoke-MobileSheetsBackup -Verbose
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. Any standard output emitted by rclone.
+.NOTES
+    Requires rclone.exe and a configured remote. Uses rclone copy rather
+    than sync, so remote-only files are not deleted. Repeated runs on the
+    same day share a destination. A nonzero rclone exit code throws.
 #>
 function Invoke-MobileSheetsBackup {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
@@ -623,6 +742,28 @@ function Invoke-MobileSheetsBackup {
     Write-Host "Backup completed successfully in $([math]::Round(($finishedAt - $startedAt).TotalSeconds, 2)) seconds."
 }
 
+<#
+.SYNOPSIS
+    Installs and configures Oh My Posh, Meslo, and a profile theme.
+.DESCRIPTION
+    Installs Oh My Posh through WinGet when missing, installs the Meslo font
+    when needed, updates Windows Terminal's default font, and appends the
+    selected theme's initialization command to the current host's profile.
+.PARAMETER ThemeName
+    Theme filename without .omp.json. Defaults to takuya.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. Any native installer or Oh My Posh output.
+.EXAMPLE
+    Install-OhMyPosh -ThemeName takuya
+.NOTES
+    Requires WinGet, Windows Terminal's standard package settings path, and
+    access to $PROFILE. Theme lookup uses a hard-coded WindowsApps package
+    version. Existing initialization lines for other themes are not replaced.
+    Changes installed software, terminal settings, and the profile without
+    -WhatIf support.
+#>
 function Install-OhMyPosh {
     # Theme name to use. See https://ohmyposh.dev/docs/themes/
     Param([string]$ThemeName = 'takuya')

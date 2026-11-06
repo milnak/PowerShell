@@ -1,9 +1,22 @@
 <#
 .SYNOPSIS
-SysEx File Verification Utility
-
+Identifies known manufacturers and devices from a SysEx file header.
+.DESCRIPTION
+Reads a .syx file as bytes and interprets selected header fields with built-in
+manufacturer and device mappings. Rejects missing files, other extensions,
+and files shorter than eight bytes; unknown mappings remain empty.
+.PARAMETER Path
+SysEx file path. Accepts pipeline strings or objects with Path or FullName properties.
+.INPUTS
+System.String, or objects with Path or FullName properties.
+.OUTPUTS
+System.Management.Automation.PSCustomObject. FileName, Company, SetMidi,
+Device, Function, ModelID, Operation, and hexadecimal header-byte properties.
 .EXAMPLE
 Get-ChildItem -File '*.syx' | Test-SysExFile | Select-Object FileName,Company,Device,Function | ConvertTo-Csv
+.NOTES
+This is header identification, not full SysEx validation: start/end markers,
+payload lengths, and checksums are not verified. Reads the entire file.
 #>
 function Test-SysExFile {
     [CmdletBinding()]

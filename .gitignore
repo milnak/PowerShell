@@ -7,5 +7,7 @@
 !*.ps1
 !Scripts/
 !Scripts/*.psm1
+!.github/
+!.github/copilot-instructions.md
 
 

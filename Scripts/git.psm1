@@ -5,6 +5,16 @@ Open git repo homepage.
 Opens the remote origin URL of the current git repository in the default browser.
 Run from anywhere inside of a local git project. Use -Root to open the repository
 root rather than the current subdirectory path.
+.PARAMETER Root
+Open the origin URL without appending the current repository-relative path.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+None. Launches the default URL handler.
+.EXAMPLE
+Invoke-GitRepo -Root
+.NOTES
+Requires git.exe, an origin remote expressible as a URI, and a browser.
 #>
 function Invoke-GitRepo {
     [CmdletBinding()]
@@ -27,7 +37,22 @@ function Invoke-GitRepo {
 
 <#
 .SYNOPSIS
-Backup modified git files
+Copies existing changed Git files into a timestamped backup directory.
+.DESCRIPTION
+Reads git status --porcelain=v1, skips deleted entries, and copies listed
+paths while retaining their relative directories. Saves gitstatus.txt with
+the backup. Supports -WhatIf and -Confirm.
+.PARAMETER Destination
+Parent directory for the FileDateTime-named backup folder.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+None. Copy progress is written to the verbose stream.
+.EXAMPLE
+Invoke-GitBackup -Destination 'D:\Backups' -WhatIf
+.NOTES
+Requires git.exe. Run at the repository root so status paths resolve
+correctly. This is a working-file copy, not a Git history backup.
 #>
 function Invoke-GitBackup {
     [CmdletBinding(SupportsShouldProcess)]
@@ -47,6 +72,20 @@ function Invoke-GitBackup {
 <#
 .SYNOPSIS
 Combination of "git grep" and "git blame".
+.DESCRIPTION
+Searches tracked file contents and runs git blame for each matching line,
+returning the commit and author information alongside the blamed text.
+.PARAMETER Query
+Pattern passed to git grep.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.Management.Automation.PSCustomObject. Hash, Author, Date, Path,
+Line, and Text properties.
+.EXAMPLE
+Get-GitGrepBlame -Query 'Export-ModuleMember'
+.NOTES
+Requires git.exe. Run inside a Git working tree.
 #>
 function Get-GitGrepBlame {
     [CmdletBinding()]
@@ -81,6 +120,19 @@ function Get-GitGrepBlame {
 <#
 .SYNOPSIS
 "Pretty prints" and displays .gitconfig file.
+.DESCRIPTION
+Parses effective Git configuration into section and subsection groups and
+returns INI-style text. With -Local, reads repository-local settings only.
+.PARAMETER Local
+Use git config --local instead of the effective combined configuration.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Configuration section headings and assignment lines.
+.EXAMPLE
+Get-GitConfig -Local
+.NOTES
+Requires git.exe. Output can include sensitive configuration values.
 #>
 function Get-GitConfig {
     param([switch]$Local)
@@ -120,11 +172,19 @@ function Get-GitConfig {
 
 function Format-GitConfig {
     <#
+.SYNOPSIS
+    Returns sorted, grouped global Git configuration text.
 .DESCRIPTION
-    Formats and outputs the Git configuration in a structured manner.
+    Reads git config --global --list, sorts and deduplicates entries, and
+    renders section and subsection headings with indented assignments.
+.INPUTS
+    None. This function does not accept pipeline input.
+.OUTPUTS
+    System.String. Formatted global Git configuration lines.
 .EXAMPLE
-    .\Format-GitConfig.ps1
-    Outputs the Git configuration grouped by sections and sorted.
+    Format-GitConfig
+.NOTES
+    Requires git.exe. Does not rewrite .gitconfig.
 #>
     $config = foreach ($line in git.exe --no-pager config --global --list | Sort-Object -Unique) {
         if ($line -match '^\s*(?<section>\w*)\.(?<subsection>\w*)\.(?<key>\w*)\s*=\s*(?<value>.+)') {
@@ -168,6 +228,30 @@ function Format-GitConfig {
 }
 
 
+<#
+.SYNOPSIS
+Downloads files and directories through the GitHub contents API.
+.DESCRIPTION
+Recursively queries a repository path at a branch, creates missing
+subdirectories, and writes files using their repository-relative paths.
+.PARAMETER Author
+GitHub repository owner or organization.
+.PARAMETER Repository
+Repository name.
+.PARAMETER Branch
+Branch or ref passed to the contents API.
+.PARAMETER ResourcePath
+Repository-relative directory path to enumerate.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. FILE and DIR progress lines.
+.EXAMPLE
+Invoke-GitDownHelper -Author microsoft -Repository CsWinRT -Branch master -ResourcePath 'src/Samples'
+.NOTES
+Requires GitHub API access. Writes beneath the current directory and can
+overwrite existing files. The top-level destination path must already exist.
+#>
 function Invoke-GitDownHelper {
     [CmdletBinding()]
     param (
@@ -243,6 +327,14 @@ A URI pointing to a GitHub repository tree location, e.g.
 
 .EXAMPLE
 Invoke-GitDown -RepoPath 'https://github.com/microsoft/CsWinRT/tree/master/src/Samples/NetProjectionSample'
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. FILE and DIR progress lines from Invoke-GitDownHelper.
+.NOTES
+Uses an unauthenticated GitHub contents API request. Branch names containing
+slashes are not supported by the URL parser. Existing files can be overwritten;
+the destination's repository-relative parent directories must already exist.
 #>
 function Invoke-GitDown {
     [CmdletBinding()]
@@ -264,7 +356,18 @@ function Invoke-GitDown {
 
 <#
 .SYNOPSIS
-View difference between the current branch and the parent branch in the difftool.
+Opens a directory diff against the oldest current-branch reflog entry.
+.DESCRIPTION
+Finds the oldest available reflog entry for the current branch and passes
+its commit to git difftool --dir-diff. This is not a merge-base calculation.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Any standard output produced by Git or the configured diff tool.
+.EXAMPLE
+Invoke-GitBranchDiff
+.NOTES
+Requires git.exe, branch reflog history, and a configured directory diff tool.
 #>
 function Invoke-GitBranchDiff {
     git.exe difftool --dir-diff ((git reflog (git branch --show-current) | Select-Object -Last 1) -split ' ')[0]
@@ -273,9 +376,19 @@ function Invoke-GitBranchDiff {
 <#
 .SYNOPSIS
 Use AI to create a descriptive git commit message and commit the changes.
-
+.DESCRIPTION
+Checks that the current directory is in a repository with staged changes,
+invokes Copilot CLI to create a commit, then displays the latest commit.
+.INPUTS
+None. This function does not accept pipeline input.
+.OUTPUTS
+System.String. Copilot and Git output, including the latest commit.
+.EXAMPLE
+Invoke-GitCommitAI
 .NOTES
-Use "git commit --amend" to modify the message, then call "git push" to push the changes.
+Requires git.exe and copilot.exe with authentication configured. Invokes
+Copilot with --allow-all and asks it to commit without a co-author. This
+can create a commit; it does not stage files or push.
 #>
 function Invoke-GitCommitAI {
     git.exe branch --show-current 2> $null | Out-Null

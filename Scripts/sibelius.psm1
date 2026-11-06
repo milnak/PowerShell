@@ -6,12 +6,23 @@ Reads a Sibelius score file and determines its internal version code.
 Validates the Sibelius file header and extracts the 32‑bit version
 identifier, returning both the raw version code and the corresponding
 Sibelius release (when known).
+.PARAMETER Path
+Literal Sibelius file path. Accepts pipeline strings or objects with Path
+or FullName properties.
+.INPUTS
+System.String, or objects with Path or FullName properties.
+.OUTPUTS
+System.Management.Automation.PSCustomObject. Path, hexadecimal VersionCode,
+and a known release name or an unknown-version description in Version.
 
 .EXAMPLE
 Get-SibeliusFileVersion -Path "score.sib"
 
 .EXAMPLE
 Get-ChildItem *.sib | Get-SibeliusFileVersion
+.NOTES
+Reads only the first 16 bytes and does not require Sibelius to be installed.
+Missing, undersized, or invalid-header files produce non-terminating errors.
 #>
 function Get-SibeliusFileVersion {
     [CmdletBinding()]

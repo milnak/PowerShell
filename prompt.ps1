@@ -1,10 +1,41 @@
 <#
 .SYNOPSIS
-Prompt
+Builds the interactive Windows PowerShell prompt.
 .DESCRIPTION
-Indicates if running as admin, and git branch.
+Returns an ANSI-colored prompt showing administrator status, an abbreviated
+working directory, Git branch and dirty state when available, and a failure
+indicator based on the status captured within the prompt.
+.INPUTS
+None. Called by the PowerShell host.
+.OUTPUTS
+System.String. Colored prompt text ending with a new input marker.
+.EXAMPLE
+. .\prompt.ps1
+.NOTES
+Defines global:Prompt. Requires Windows identity APIs and an ANSI terminal;
+Git information is omitted when Git lookup fails.
 #>
 function global:Prompt {
+    <#
+    .SYNOPSIS
+    Shortens a path to fit a prompt character budget.
+    .DESCRIPTION
+    Keeps short paths unchanged. For absolute paths, retains the drive
+    qualifier and as many trailing components as fit after an ellipsis.
+    Relative paths retain a trailing substring after an ellipsis.
+    .PARAMETER Path
+    Path text to shorten.
+    .PARAMETER MaxChars
+    Desired character limit. Defaults to 80; the prompt passes 60.
+    .INPUTS
+    None. This function does not accept pipeline input.
+    .OUTPUTS
+    System.String. Original or abbreviated path text.
+    .EXAMPLE
+    TruncatePath -Path 'C:\Projects\Example\Source' -MaxChars 20
+    .NOTES
+    Local display helper; does not resolve or modify filesystem paths.
+    #>
     function TruncatePath {
         Param([string]$Path, [int]$MaxChars = 80)
         # truncated is the minimal string that will be shown, e.g. 'C:...'
@@ -31,6 +62,42 @@ function global:Prompt {
         }
         $truncated
     }
+    <#
+    .SYNOPSIS
+    Wraps text in ANSI color and style sequences.
+    .DESCRIPTION
+    Adds requested styles and standard or bright foreground/background colors.
+    Appends a reset sequence unless NoReset is specified.
+    .PARAMETER Text
+    Text to decorate.
+    .PARAMETER ForegroundColor
+    Standard color name, optionally prefixed with Bright, such as BrightWhite.
+    .PARAMETER BackgroundColor
+    Standard or Bright-prefixed background color name.
+    .PARAMETER Bold
+    Enable bold intensity.
+    .PARAMETER Italic
+    Enable italic styling.
+    .PARAMETER Underline
+    Enable underline styling.
+    .PARAMETER Blink
+    Enable blinking where supported.
+    .PARAMETER Inverse
+    Enable inverse foreground/background rendering.
+    .PARAMETER Strikethrough
+    Enable strikethrough styling.
+    .PARAMETER NoReset
+    Leave the selected styles active after the returned text.
+    .INPUTS
+    None. This function does not accept pipeline input.
+    .OUTPUTS
+    System.String. Text with ANSI escape sequences.
+    .EXAMPLE
+    Get-AnsiColorString -Text ' ADMIN ' -ForegroundColor BrightWhite -BackgroundColor Red
+    .NOTES
+    Local prompt helper. Unknown color names throw; visual support depends
+    on the terminal.
+    #>
     function Get-AnsiColorString {
         Param(
             # The text to colorize.
